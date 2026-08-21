@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Duplicado mínimo de los tokens de `AgroColors` que el sistema de recursos XML
+  necesita antes de que Compose arranque.
+
+  ⚠️ Si cambias uno aquí, cámbialo también en
+  `core/designsystem/.../theme/AgroColors.kt`. Son los únicos dos sitios donde
+  vive un color, y desincronizarlos produce el parpadeo de arranque que el tema
+  existe para evitar.
+-->
+<resources>
+    <!-- oklch(0.985 0.002 250) — fondo del banco -->
+    <color name="bench_50">#FFF9FAFB</color>
+    <!-- oklch(0.220 0.008 250) — grafito -->
+    <color name="bench_900">#FF181B1E</color>
+    <!-- oklch(0.58 0.28 330) — marca -->
+    <color name="brand_500">#FFC800C2</color>
+</resources>

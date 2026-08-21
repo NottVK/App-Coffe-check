@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Nombre visible en el lanzador.
+
+      La app publicada se llama «coffee-cheeck-app» —con la errata incluida— y
+      este refactor lo cambia a «AgroVisión».
+
+      Cambiar el nombre visible NO rompe nada en Play: lo que es invariante es el
+      `applicationId`, no la etiqueta. Pero sí lo nota el usuario, así que queda
+      registrado aquí como decisión, no como descuido.
+    -->
+    <string name="app_name">AgroVisión</string>
+
+    <!-- ── Inicio ─────────────────────────────────────────────────────────── -->
+    <string name="home_saludo">Hola</string>
+    <string name="home_subtitulo">Mira una hoja de cerca y te digo qué le pasa.</string>
+    <string name="home_analizar">Analizar</string>
+    <string name="home_analizar_ayuda">Toma una foto de la hoja o el fruto afectado</string>
+    <string name="home_analizar_descripcion">Analizar una planta con la cámara</string>
+    <string name="home_catalogo">Plagas</string>
+    <string name="home_catalogo_detalle">%1$d fichas para consultar</string>
+    <string name="home_historial">Historial</string>
+    <string name="home_historial_detalle">Tus análisis anteriores</string>
+    <string name="home_historial_pendientes">%1$d por enviar</string>
+
+    <!-- ── Navegación inferior ────────────────────────────────────────────── -->
+    <string name="nav_inicio">Inicio</string>
+    <string name="nav_plagas">Plagas</string>
+    <string name="nav_historial">Historial</string>
+</resources>

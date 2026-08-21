@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Español colombiano, registro rural (§2.1).
+
+  Tres reglas que gobiernan toda cadena de este archivo:
+
+  1. Los errores dicen QUÉ PASÓ y QUÉ HACER. Sin disculpas y sin vaguedad
+     (§11.8). «No pudimos procesar tu solicitud» no sirve de nada a alguien
+     de pie en un cafetal.
+  2. Ninguna cadena asume alfabetización digital. Nada de «sincronizar»,
+     «caché» ni «token».
+  3. Se tutea. Es el registro que corresponde y el que usan las apps que este
+     público ya maneja.
+-->
+<resources>
+
+    <!-- ── Compuerta 1: calidad de imagen ─────────────────────────────────── -->
+    <string name="calidad_borrosa">La foto salió movida. Apoya el codo y vuelve a intentar.</string>
+    <string name="calidad_oscura">Hay poca luz. Busca sombra clara o usa la linterna.</string>
+    <string name="calidad_clara">El sol está pegando muy fuerte. Haz sombra con tu cuerpo.</string>
+    <string name="calidad_lejos">Acércate más a la hoja, como a un palmo.</string>
+    <string name="calidad_sin_planta">No alcanzo a ver una hoja. Enfoca la parte afectada.</string>
+
+    <!-- ── Compuertas 2 y 3: el modelo reconoce sus límites ──────────────── -->
+    <string name="resultado_no_reconocida">No reconozco esta plaga. Puedo mandársela a un agrónomo.</string>
+    <string name="resultado_poca_confianza">No estoy seguro de lo que veo. Mejor que lo revise un agrónomo.</string>
+    <string name="resultado_ambiguo">Se parece a dos plagas distintas. Mejor que lo revise un agrónomo.</string>
+
+    <!-- ── Escaneo ────────────────────────────────────────────────────────── -->
+    <string name="escaneo_sin_camara">No puedo abrir la cámara. Revisa el permiso en Ajustes.</string>
+    <string name="escaneo_sin_modelo">Todavía no tengo el modelo listo. Conéctate un momento a internet.</string>
+    <string name="escaneo_fallo_inferencia">Algo falló al analizar la foto. Intenta de nuevo.</string>
+    <string name="escaneo_guardado">Guardado en tu historial.</string>
+    <string name="escaneo_confirmado">Gracias. Con eso el sistema aprende.</string>
+    <string name="escaneo_corregido">Corrección guardada. Gracias, eso vale mucho.</string>
+
+    <!-- ── Cola de subida ─────────────────────────────────────────────────── -->
+    <string name="cola_necesita_cuenta">Tienes %1$s registros guardados. Se envían cuando crees tu cuenta.</string>
+    <string name="cola_pendiente_validacion">Tienes %1$s registros guardados. Se envían apenas validemos tu cuenta.</string>
+    <string name="cola_sin_conexion">Sin señal. Todo queda guardado y se envía solo cuando haya.</string>
+    <string name="cola_completada">Listo, ya se enviaron tus registros.</string>
+
+    <!-- ── Solicitudes de revisión ────────────────────────────────────────── -->
+    <string name="solicitud_faltan_fotos">Necesito al menos %1$s fotos desde ángulos distintos.</string>
+    <string name="solicitud_creada">Solicitud guardada. Se envía apenas haya señal.</string>
+    <string name="solicitud_resuelta">Un agrónomo respondió tu solicitud.</string>
+
+    <!-- ── Modelo ─────────────────────────────────────────────────────────── -->
+    <string name="modelo_actualizacion_disponible">Hay una versión nueva del reconocedor.</string>
+    <string name="modelo_actualizado">Reconocedor actualizado a la versión %1$s.</string>
+    <string name="modelo_firma_invalida">La actualización no venía firmada por SmartClic. No se instaló.</string>
+    <string name="modelo_integridad_invalida">La descarga llegó incompleta. Lo intento de nuevo más tarde.</string>
+    <string name="modelo_app_desactualizada">Actualiza AgroVisión desde Play Store para recibir el reconocedor nuevo.</string>
+    <string name="modelo_revertido">Volví a la versión anterior del reconocedor.</string>
+
+    <!-- ── Genéricos ──────────────────────────────────────────────────────── -->
+    <string name="error_sin_espacio">Tu teléfono está sin espacio. Borra algo y vuelve a intentar.</string>
+    <string name="error_inesperado">Algo no salió bien. Intenta de nuevo.</string>
+    <string name="error_sin_conexion">Sin conexión. Guardé todo aquí en el teléfono.</string>
+
+    <!-- ── Sistema de diseño ──────────────────────────────────────────────── -->
+    <string name="severidad_sano">sano</string>
+    <string name="severidad_incipiente">incipiente</string>
+    <string name="severidad_moderado">moderado</string>
+    <string name="severidad_alto">alto</string>
+    <string name="severidad_severo">severo</string>
+    <string name="severidad_descripcion">Severidad %1$s, nivel %2$d de 4</string>
+    <string name="confianza_descripcion">Confianza del %1$d por ciento</string>
+
+</resources>

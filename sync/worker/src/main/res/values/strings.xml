@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Textos del servicio de subida. Los ve el productor en la barra de
+  notificaciones, así que nada de «sincronizando» ni «procesando cola».
+-->
+<resources>
+    <string name="sync_service_titulo">Enviando tus registros</string>
+    <string name="sync_service_texto">Puedes seguir usando el teléfono.</string>
+    <string name="sync_canal_nombre">Envío de registros</string>
+    <string name="sync_canal_descripcion">Avisa mientras se envían tus fotos y solicitudes.</string>
+    <string name="sync_resultado_ok">Listo, ya se enviaron tus registros.</string>
+    <string name="sync_resultado_fallo">No se pudo enviar todo. Queda guardado y lo intento después.</string>
+</resources>

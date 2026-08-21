@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Rutas del FileProvider.
+
+  ⚠️ La autoridad `io.ionic.starter.fileprovider` se conserva de la app publicada
+  (PRESERVE.md §8): cualquier URI que se haya persistido apunta ahí.
+
+  Se exponen únicamente los subdirectorios de `filesDir` que el refactor usa. NO
+  se expone `filesDir` entero: eso daría acceso a `datastore/` —donde vive el
+  puntero de ranura de modelo— y a la base de datos.
+-->
+<paths>
+    <files-path name="capturas" path="captures/" />
+    <files-path name="miniaturas" path="thumbnails/" />
+    <cache-path name="compartir" path="share/" />
+</paths>

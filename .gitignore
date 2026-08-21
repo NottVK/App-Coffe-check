@@ -1,0 +1,27 @@
+*.iml
+.gradle/
+.kotlin/
+build/
+local.properties
+.idea/
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+
+# ── Secretos: nada de esto entra a Git (§1 reglas transversales) ──
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+google-services.json
+*.pem
+*.p12
+
+# La clave PRIVADA de firma de modelos vive en la estación de ML o en un HSM.
+# Si alguna vez aparece aquí, hay que rotarla, no borrar el archivo (§15.6).
+model_signing_private*
+
+# Artefactos de modelo descargados en desarrollo
+app/src/main/assets/models/*.tflite
+!app/src/main/assets/models/.gitkeep

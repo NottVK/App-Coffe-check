@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copia de seguridad automática (API 22–30).
+
+  La app publicada declara `allowBackup="true"` y se conserva: quitarlo ahora
+  haría que los usuarios que cambian de teléfono pierdan su historial, que es
+  justo lo contrario de lo que este refactor pretende.
+
+  Pero NO todo se respalda:
+
+   · `models/` — entre 4 y 9 MB por ranura, y el modelo se vuelve a descargar
+     solo. Respaldarlo desperdicia la cuota de Google Drive del usuario y podría
+     restaurar en un teléfono nuevo un modelo que no le corresponde por canal.
+
+   · `datastore/model_slot.json` — apunta a ranuras que en el dispositivo nuevo
+     estarán vacías. Restaurarlo dejaría un puntero a un modelo inexistente.
+-->
+<full-backup-content>
+    <include domain="database" path="." />
+    <include domain="file" path="captures/" />
+    <include domain="file" path="thumbnails/" />
+    <include domain="file" path="datastore/agrovision.preferences_pb" />
+
+    <exclude domain="file" path="models/" />
+    <exclude domain="file" path="datastore/model_slot.json" />
+    <exclude domain="sharedpref" path="agrovision_tokens.xml" />
+</full-backup-content>

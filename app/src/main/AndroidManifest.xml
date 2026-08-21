@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ⚠️ CONTRATO DE IDENTIDAD PLAY STORE — leer PRESERVE.md antes de editar.
+
+  Este manifiesto convive con una app ya instalada en teléfonos de gente real.
+  Tres cosas de aquí no se pueden cambiar sin romperles algo, y ninguna produce
+  un error de compilación.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- ── Permisos ─────────────────────────────────────────────────────────
+         La app publicada solo declaraba INTERNET. Los demás los añade este
+         refactor y TODOS tienen consecuencias en Play Console (PRESERVE.md §4).
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+    <!-- Ubicación: opcional, se solicita en contexto y nunca al arrancar
+         (§12.2). El productor puede además elegir precisión de vereda. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <!-- `required=false`: hay teléfonos de gama muy baja sin autofoco, y no es
+         motivo para que Play les oculte la app. La compuerta de calidad ya
+         rechaza lo que no sirva. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+
+    <application
+        android:name=".AgroVisionApplication"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.AgroVision.Starting"
+        android:networkSecurityConfig="@xml/network_security_config"
+        tools:targetApi="34">
+
+        <!--
+          La actividad real del refactor. Nombre nuevo, paquete nuevo.
+          NO exportada: quien la abre es el alias de abajo.
+        -->
+        <activity
+            android:name="co.agrovision.MainActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.AgroVision.Starting" />
+
+        <!--
+          ⚠️ ESTE ALIAS ES OBLIGATORIO. No lo borres «porque parece redundante».
+
+          La app publicada exporta `io.ionic.starter.MainActivity` como LANZADOR.
+          Ese nombre de componente está guardado en:
+            · los accesos directos que los usuarios anclaron a su pantalla de inicio
+            · el historial del lanzador
+            · cualquier automatización o integración que apunte a la app
+
+          Renombrar la clase del lanzador NO produce ningún error al compilar:
+          simplemente, tras actualizar, los accesos anclados dejan de funcionar y
+          el usuario cree que la app se rompió.
+
+          El alias conserva el nombre de componente publicado apuntando a la
+          actividad nueva. Es la técnica estándar para renombrar un lanzador sin
+          perder los accesos directos, y no cuesta nada mantenerla para siempre.
+
+          El nombre va COMPLETO y no como `.MainActivity` a propósito: `namespace`
+          y `applicationId` difieren en este proyecto, y la forma relativa se
+          resolvería contra el namespace, produciendo un componente distinto del
+          publicado.
+        -->
+        <activity-alias
+            android:name="io.ionic.starter.MainActivity"
+            android:targetActivity="co.agrovision.MainActivity"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!--
+          Servicio en primer plano: disparador terciario de sincronización (§9.4).
+          Para lotes grandes acumulados tras días sin señal. Lo inicia siempre una
+          acción visible del productor, nunca la app por su cuenta.
+
+          `foregroundServiceType="dataSync"` es obligatorio desde API 34 y hay que
+          justificarlo en el formulario de Play (PRESERVE.md §4).
+        -->
+        <service
+            android:name="co.agrovision.sync.worker.SyncForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!--
+          FileProvider. La autoridad se conserva EXACTA: `${applicationId}` se
+          expande a `io.ionic.starter`, igual que en la app publicada. Cualquier
+          URI que se haya persistido apunta ahí.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!--
+          WorkManager con inicialización manual: la fábrica de Hilt tiene que
+          estar lista antes de que se instancie el primer Worker.
+        -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+
+        <!-- Sin componentes exportados salvo el alias del lanzador (§15.4). -->
+
+    </application>
+</manifest>

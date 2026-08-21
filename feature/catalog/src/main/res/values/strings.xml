@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="catalogo_titulo">Plagas y problemas</string>
+    <string name="catalogo_buscar">Buscar por nombre…</string>
+    <string name="catalogo_vacio_titulo">Todavía no hay fichas</string>
+    <string name="catalogo_vacio_cuerpo">Cuando el catálogo se sincronice verás aquí las plagas del cultivo de café.</string>
+    <string name="catalogo_sin_resultados_titulo">Sin resultados para «%1$s»</string>
+    <string name="catalogo_sin_resultados_cuerpo">Prueba con el nombre común, el científico o como lo llaman en tu vereda.</string>
+    <string name="catalogo_cuenta">%1$d fichas</string>
+
+    <string name="ficha_sintomas">Cómo se ve</string>
+    <string name="ficha_organos">Dónde aparece</string>
+    <string name="ficha_manejo">Qué hacer</string>
+    <string name="ficha_referencia">Fuente</string>
+    <string name="ficha_volver">Volver</string>
+
+    <!--
+      ⚠️ §13.6 y error prohibido nº 15. Sin firma de un agrónomo con tarjeta
+      profesional vigente, la sección de manejo NO se muestra: se muestra esto.
+      Distribuir dosis e ingredientes activos sin respaldo es exposición ante
+      el ICA, y el productor merece saber por qué falta la información.
+    -->
+    <string name="ficha_manejo_sin_aval_titulo">Recomendaciones pendientes de aval</string>
+    <string name="ficha_manejo_sin_aval_cuerpo">Las recomendaciones de manejo se muestran cuando un ingeniero agrónomo con tarjeta profesional las revisa y firma. Mientras tanto, consulta con el técnico de tu zona.</string>
+
+    <string name="tipo_enfermedad">Enfermedad</string>
+    <string name="tipo_plaga">Plaga</string>
+    <string name="tipo_deficiencia">Deficiencia nutricional</string>
+    <string name="tipo_sano">Sano</string>
+    <string name="tipo_otro">Otro</string>
+
+    <string name="organo_hoja">Hoja</string>
+    <string name="organo_fruto">Fruto</string>
+    <string name="organo_tallo">Tallo</string>
+    <string name="organo_raiz">Raíz</string>
+    <string name="organo_flor">Flor</string>
+</resources>

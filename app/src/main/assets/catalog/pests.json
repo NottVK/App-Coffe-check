@@ -1,0 +1,207 @@
+[
+  {
+    "id": "Enfermedad_Roya",
+    "scientificName": "Hemileia vastatrix",
+    "commonName": "Roya de Café",
+    "localSynonyms": [],
+    "crop": "CAFE",
+    "affectedOrgans": [
+      "HOJA"
+    ],
+    "description": "Esta enfermedad se manifiesta a través de manchas amarillas en las hojas que eventualmente se vuelven rojizas, acompañadas por un polvo anaranjado constituido por esporas del hongo. Estas manchas interfieren con la fotosíntesis, debilitando la planta y reduciendo la producción de café.",
+    "recommendations": [
+      {
+        "kind": "QUIMICO",
+        "summary": "Para controlar la roya del café, es fundamental el uso de fungicidas como el óxido de cobre, que ayudan a prevenir la propagación del hongo.",
+        "detail": "Para controlar la roya del café, es fundamental el uso de fungicidas como el óxido de cobre, que ayudan a prevenir la propagación del hongo. También es crucial el manejo adecuado de la sombra para reducir la humedad en el follaje, lo que disminuye las condiciones favorables para el hongo. La renovación de plantaciones con variedades resistentes a la roya es otra estrategia importante para mitigar el impacto de esta enfermedad."
+      }
+    ],
+    "images": [
+      "Enfermedad_Roya_img1.jpg",
+      "Enfermedad_Roya_img2.jpg"
+    ],
+    "version": 1,
+    "kind": "Enfermedad",
+    "reference": "Avelino, J. et al. (2006). 'Effects of agroforestry and seasonal shade on coffee performance and bean quality in Central America.'",
+    "approval": null
+  },
+  {
+    "id": "Enfermedad_ManchadeHierro",
+    "scientificName": "Cercospora coffeicola",
+    "commonName": "Mancha de Hierro",
+    "localSynonyms": [],
+    "crop": "CAFE",
+    "affectedOrgans": [
+      "HOJA"
+    ],
+    "description": "Las hojas afectadas presentan pequeñas manchas de color marrón oscuro a negro, que se expanden y fusionan, causando la caída prematura de las hojas y el debilitamiento general del árbol. Estas manchas pueden cubrir grandes áreas de la hoja, interfiriendo con su capacidad fotosintética.",
+    "recommendations": [
+      {
+        "kind": "QUIMICO",
+        "summary": "La rotación de cultivos es una práctica efectiva para reducir la incidencia de la mancha de hierro, ya que interrumpe el ciclo de vida del hongo.",
+        "detail": "La rotación de cultivos es una práctica efectiva para reducir la incidencia de la mancha de hierro, ya que interrumpe el ciclo de vida del hongo. El manejo adecuado de la sombra también es crucial, ya que reduce la humedad en el follaje, limitando las condiciones favorables para el hongo. El uso de fungicidas sistémicos puede ayudar a controlar la enfermedad, aunque es importante seguir las recomendaciones específicas para evitar la resistencia del hongo."
+      }
+    ],
+    "images": [
+      "Enfermedad_ManchadeHierro_img1.jpg",
+      "Enfermedad_ManchadeHierro_img2.jpg"
+    ],
+    "version": 1,
+    "kind": "Enfermedad",
+    "reference": "Perfecto, I. et al. (2015). 'Diversification practices reduce organic to conventional yield gap in coffee agroforests of the Sierra Madre de Chiapas, Mexico.'",
+    "approval": null
+  },
+  {
+    "id": "Enfermedad_OjodeGallo",
+    "scientificName": "Mycena citricolor",
+    "commonName": "Ojo de Gallo del Café",
+    "localSynonyms": [],
+    "crop": "CAFE",
+    "affectedOrgans": [
+      "HOJA"
+    ],
+    "description": "Esta enfermedad se caracteriza por manchas circulares de color marrón oscuro en las hojas, que pueden provocar la muerte del tejido afectado y una severa defoliación. Las manchas a menudo tienen un borde más claro y un centro más oscuro, lo que les da un aspecto distintivo.",
+    "recommendations": [
+      {
+        "kind": "QUIMICO",
+        "summary": "Para controlar el ojo de gallo del café, es fundamental mantener el cultivo en zonas sombreadas, con un 30-40% de sombra, lo que ayuda a reducir la humedad excesiva.",
+        "detail": "Para controlar el ojo de gallo del café, es fundamental mantener el cultivo en zonas sombreadas, con un 30-40% de sombra, lo que ayuda a reducir la humedad excesiva. El control de malezas es crucial, ya que estas pueden ser hospedadoras de hongos que afectan la planta. Las aplicaciones de fungicidas con altas concentraciones de cobre y azufre también son efectivas para prevenir y controlar esta enfermedad."
+      }
+    ],
+    "images": [
+      "Enfermedad_OjodeGallo_img1.jpg",
+      "Enfermedad_OjodeGallo_img2.jpg"
+    ],
+    "version": 1,
+    "kind": "Enfermedad",
+    "reference": "",
+    "approval": null
+  },
+  {
+    "id": "Enfermedad_Antracnosis",
+    "scientificName": "Colletotrichum spp.",
+    "commonName": "Antracnosis del Café",
+    "localSynonyms": [],
+    "crop": "CAFE",
+    "affectedOrgans": [
+      "HOJA",
+      "FRUTO"
+    ],
+    "description": "Lesiones necróticas en hojas, ramas y frutos, con puntos negros o anillos oscuros en las manchas.",
+    "recommendations": [
+      {
+        "kind": "QUIMICO",
+        "summary": "Eliminación de residuos vegetales, uso de fungicidas específicos, y prácticas de manejo integrado de plagas y enfermedades.",
+        "detail": "Eliminación de residuos vegetales, uso de fungicidas específicos, y prácticas de manejo integrado de plagas y enfermedades."
+      }
+    ],
+    "images": [
+      "Enfermedad_Antracnosis_img1.jpg",
+      "Enfermedad_Antracnosis_img2.jpg"
+    ],
+    "version": 1,
+    "kind": "Enfermedad",
+    "reference": "Batista, D. S. et al. (2015). 'Planting density and severity of coffee leaf rust in agroforestry systems.'",
+    "approval": null
+  },
+  {
+    "id": "Deficiencia_Azufre",
+    "scientificName": "Sin binomio registrado",
+    "commonName": "Deficiencia de Azufre-S",
+    "localSynonyms": [],
+    "crop": "CAFE",
+    "affectedOrgans": [
+      "HOJA"
+    ],
+    "description": "La deficiencia de azufre se manifiesta con un amarillamiento uniforme de las hojas más nuevas del árbol de café, mientras que las hojas más viejas próximas al ápice de las ramas permanecen verdes. Esta condición afecta el crecimiento general de la planta y puede reducir significativamente la productividad.",
+    "recommendations": [
+      {
+        "kind": "CULTURAL",
+        "summary": "Para prevenir la deficiencia de azufre, es esencial la conservación del suelo mediante prácticas que eviten la erosión.",
+        "detail": "Para prevenir la deficiencia de azufre, es esencial la conservación del suelo mediante prácticas que eviten la erosión. La aplicación de abonos orgánicos y planes de fertilización que incluyan azufre son cruciales para mantener niveles adecuados de este nutriente en el suelo. Además, es importante monitorear regularmente los niveles de azufre en el suelo y ajustar las prácticas de fertilización según sea necesario."
+      }
+    ],
+    "images": [
+      "Deficiencia_Azufre_img1.jpg",
+      "Deficiencia_Azufre_img2.jpg"
+    ],
+    "version": 1,
+    "kind": "Deficiencia nutricional",
+    "reference": "Fondo Nacional del Café. (2017). Informe de Gerencia Técnica: Programa de Investigación Científica. Fondo Nacional del Café.",
+    "approval": null
+  },
+  {
+    "id": "Deficiencia_Potasio",
+    "scientificName": "Sin binomio registrado",
+    "commonName": "Deficiencia de Potasio-K",
+    "localSynonyms": [],
+    "crop": "CAFE",
+    "affectedOrgans": [
+      "HOJA",
+      "FRUTO"
+    ],
+    "description": "La deficiencia de potasio se presenta con necrosis en la punta y los bordes de las hojas más viejas del árbol de café. Esta condición puede causar una reducción en el tamaño de los frutos, especialmente en el grosor de la pulpa, afectando la calidad y cantidad de la cosecha.",
+    "recommendations": [
+      {
+        "kind": "CULTURAL",
+        "summary": "La deficiencia de potasio se puede prevenir mediante la aplicación de abonos orgánicos ricos en este nutriente, como la pulpa de café.",
+        "detail": "La deficiencia de potasio se puede prevenir mediante la aplicación de abonos orgánicos ricos en este nutriente, como la pulpa de café. También es importante llevar un control riguroso de plagas y enfermedades que afectan las raíces, ya que estas pueden interferir con la absorción de potasio. El monitoreo regular de los niveles de potasio en el suelo y la aplicación oportuna de fertilizantes potásicos son esenciales para mantener la salud y productividad de la planta."
+      }
+    ],
+    "images": [
+      "Deficiencia_Potasio_img1.jpg",
+      "Deficiencia_Potasio_img2.jpg"
+    ],
+    "version": 1,
+    "kind": "Deficiencia nutricional",
+    "reference": "Fondo Nacional del Café. (2017). Informe de Gerencia Técnica: Programa de Investigación Científica. Fondo Nacional del Café.",
+    "approval": null
+  },
+  {
+    "id": "Enfermedad_Phoma",
+    "scientificName": "Phoma spp.",
+    "commonName": "Quema del Cogollo",
+    "localSynonyms": [
+      "quema",
+      "muerte descendente",
+      "phoma"
+    ],
+    "crop": "CAFE",
+    "affectedOrgans": [
+      "HOJA",
+      "TALLO",
+      "FRUTO"
+    ],
+    "description": "Aparece como lesiones oscuras de borde irregular que empiezan en el borde de la hoja o en el cogollo y avanzan hacia adentro, con aspecto de quemadura. El tejido afectado se vuelve pardo oscuro y quebradizo. Ataca sobre todo las partes jóvenes de la planta y se favorece con temperaturas bajas, vientos fríos y humedad alta, condiciones frecuentes en cafetales de altura. Cuando alcanza el cogollo detiene el crecimiento de la rama.",
+    "recommendations": [],
+    "images": [
+      "Enfermedad_Phoma_img1.jpg",
+      "Enfermedad_Phoma_img2.jpg"
+    ],
+    "version": 1,
+    "kind": "Enfermedad",
+    "reference": "Imágenes: JMuBEN (Jepkoech, Kenduiywo, Mugo y Chebet, 2021), Data in Brief 36, 107142, CC BY 4.0. Descripción pendiente de revisión por ingeniero agrónomo con tarjeta profesional vigente."
+  },
+  {
+    "id": "Plaga_Minador",
+    "scientificName": "Leucoptera coffeella",
+    "commonName": "Minador de la Hoja",
+    "localSynonyms": [
+      "minador",
+      "palomilla del cafeto"
+    ],
+    "crop": "CAFE",
+    "affectedOrgans": [
+      "HOJA"
+    ],
+    "description": "No es un hongo sino un insecto: la larva de una pequeña palomilla se mete entre las dos capas de la hoja y va comiendo por dentro. Deja galerías o manchas pardas de contorno irregular, secas al tacto, que al mirarlas a contraluz se ven huecas. Es la diferencia clave con una enfermedad: la lesión está vacía por dentro. Las hojas muy atacadas se caen, y el árbol pierde área para hacer fotosíntesis justo cuando llena el grano.",
+    "recommendations": [],
+    "images": [
+      "Plaga_Minador_img1.jpg",
+      "Plaga_Minador_img2.jpg"
+    ],
+    "version": 1,
+    "kind": "Plaga",
+    "reference": "Imágenes: JMuBEN2 (Jepkoech, Kenduiywo, Mugo y Chebet, 2021), Data in Brief 36, 107142, CC BY 4.0. Descripción pendiente de revisión por ingeniero agrónomo con tarjeta profesional vigente."
+  }
+]

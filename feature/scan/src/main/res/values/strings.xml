@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="scan_iniciando">Iniciando…</string>
+    <string name="scan_preparando">Preparando el reconocedor…</string>
+    <string name="scan_analizando">Mirando la foto…</string>
+
+    <string name="scan_es_correcto">Sí, es esto</string>
+    <string name="scan_no_es_esto">No es esto</string>
+    <string name="scan_entendido">Entendido</string>
+    <string name="scan_tomar_otra">Tomar otra foto</string>
+    <string name="scan_reintentar">Intentar de nuevo</string>
+    <string name="scan_pedir_agronomo">Que lo revise un agrónomo</string>
+
+    <string name="scan_no_es_plaga">No parece una plaga</string>
+    <string name="scan_no_reconozco">No reconozco esto</string>
+    <string name="scan_no_reconozco_explicacion">Nunca había visto algo así. Un agrónomo puede revisarlo y responderte.</string>
+    <string name="scan_sin_reconocedor">Guardé tu foto</string>
+    <string name="scan_sin_reconocedor_explicacion">Todavía no tengo el reconocedor instalado, pero guardé tu foto. Un agrónomo puede revisarla y responderte.</string>
+    <string name="scan_incierto_explicacion">Prefiero no adivinar. Un agrónomo puede mirarlo y responderte.</string>
+    <string name="scan_calidad_explicacion">Con una foto mejor puedo darte una respuesta confiable.</string>
+    <string name="scan_error_explicacion">Puedes intentarlo cuando quieras.</string>
+
+    <!--
+      Honestidad sobre lo que el reconocedor activo puede y no puede hacer
+      (ADR-014). El modelo heredado no tiene cabeza de embedding ni clase de
+      rechazo, así que no sabe reconocer cuándo no sabe. Ocultarlo sería
+      presentar como diagnóstico algo que el sistema no puede respaldar.
+    -->
+    <string name="scan_aviso_modelo_heredado">Este reconocedor todavía no sabe avisarte cuando ve algo que no conoce. Si no te cuadra, pide revisión.</string>
+
+    <!-- ── Cámara ─────────────────────────────────────────────────────────── -->
+    <string name="camara_disparar">Tomar la foto</string>
+    <string name="camara_sin_permiso_titulo">Necesito ver por la cámara</string>
+    <string name="camara_sin_permiso_cuerpo">Sin la cámara no puedo mirar la hoja. La foto se queda en tu teléfono.</string>
+    <string name="camara_permitir">Permitir la cámara</string>
+
+    <!-- Guía de encuadre. Instrucciones, no diagnósticos. -->
+    <string name="guia_acercate">Acércate más, como a un palmo</string>
+    <string name="guia_alejate">Aléjate un poco</string>
+    <string name="guia_mas_luz">Busca mejor luz</string>
+    <string name="guia_estabiliza">Sostén firme el teléfono</string>
+    <string name="guia_listo">Encuadra la parte afectada y dispara</string>
+</resources>

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Seguridad de transporte (§15.4).
+
+  `cleartextTrafficPermitted="false"` sin excepciones en release. La app maneja
+  fotografías de lotes, coordenadas y números de teléfono; nada de eso viaja en
+  claro.
+
+  El anclaje de certificado NO se declara aquí sino en OkHttp
+  (`NetworkModule.provideCertificatePinner`). Dos razones:
+
+   1. Los pines se leen de `gradle.properties`, así que rotarlos es cambiar una
+      línea en vez de editar XML por variante.
+   2. Con `<pin-set>` en este archivo, un pin caducado deja la app **sin red y
+      sin recurso**: no hay forma de desactivarlo remotamente. En OkHttp se
+      puede degradar por configuración si algún día hace falta.
+
+  ⚠️ Un solo pin convierte la rotación del certificado en un apagón total de la
+  flota instalada. Por eso `agrovision.pinning.pins` exige dos.
+-->
+<network-security-config>
+
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!--
+      Solo en depuración: permite tráfico en claro contra el emulador y el
+      backend local, y confía en certificados instalados por el usuario para
+      poder inspeccionar con un proxy.
+
+      Esto NO llega a release: `debug-overrides` se ignora en compilaciones no
+      depurables por definición de la plataforma.
+    -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+
+</network-security-config>

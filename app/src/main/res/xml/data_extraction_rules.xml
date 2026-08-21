@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Reglas de extracción de datos (API 31+). Equivalente moderno de backup_rules,
+  con la distinción entre copia en la nube y transferencia directa entre
+  dispositivos.
+-->
+<data-extraction-rules>
+
+    <cloud-backup>
+        <include domain="database" path="." />
+        <include domain="file" path="captures/" />
+        <include domain="file" path="thumbnails/" />
+        <include domain="file" path="datastore/agrovision.preferences_pb" />
+
+        <exclude domain="file" path="models/" />
+        <exclude domain="file" path="datastore/model_slot.json" />
+        <!-- Los tokens NUNCA salen del dispositivo: un refresco restaurado en
+             otro teléfono es una sesión duplicada, y la detección de
+             reutilización lo interpretaría como robo (§15.3). -->
+        <exclude domain="sharedpref" path="agrovision_tokens.xml" />
+    </cloud-backup>
+
+    <!--
+      Transferencia directa de teléfono a teléfono. Aquí sí tiene sentido llevar
+      el modelo: el usuario está migrando y ahorrarle 9 MB de descarga sobre
+      datos prepago es un favor real. El puntero sigue excluido porque lo
+      reconstruye el registro al arrancar.
+    -->
+    <device-transfer>
+        <include domain="database" path="." />
+        <include domain="file" path="captures/" />
+        <include domain="file" path="thumbnails/" />
+        <include domain="file" path="models/" />
+        <include domain="file" path="datastore/agrovision.preferences_pb" />
+
+        <exclude domain="file" path="datastore/model_slot.json" />
+        <exclude domain="sharedpref" path="agrovision_tokens.xml" />
+    </device-transfer>
+
+</data-extraction-rules>
