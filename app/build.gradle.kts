@@ -87,6 +87,13 @@ android {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
             isMinifyEnabled = false
+            // Backend local. `network_security_config.xml` ya permite tráfico en
+            // claro hacia 10.0.2.2 y localhost.
+            buildConfigField(
+                "String",
+                "API_BASE_URL",
+                "\"${providers.gradleProperty("agrovision.api.baseUrlDebug").get()}\"",
+            )
         }
 
         release {
@@ -125,7 +132,8 @@ dependencies {
 
     implementation(projects.feature.scan)
     implementation(projects.feature.catalog)
-    // Pendientes: review, history, settings.
+    implementation(projects.feature.review)
+    // Pendientes: history, settings.
     // Sus rutas ya existen en AgroVisionDestinations; falta la pantalla.
 
     implementation(projects.ml.inference)

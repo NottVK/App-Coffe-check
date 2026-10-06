@@ -112,6 +112,7 @@ class FakeCaptureRepository(
         serverId: String?,
         error: String?,
         nextAttemptAtEpochMillis: Long?,
+        countsAsAttempt: Boolean,
     ) = Unit
 
     override suspend fun confirmPrediction(id: String): AgroResult<Unit, DomainError> {

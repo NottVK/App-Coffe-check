@@ -66,7 +66,7 @@ interface CaptureDao {
             server_id = COALESCE(:serverId, server_id),
             last_sync_error = :error,
             next_attempt_at = :nextAttemptAt,
-            sync_attempts = CASE WHEN :state = 'PENDING' OR :state = 'FAILED'
+            sync_attempts = CASE WHEN :countsAsAttempt AND (:state = 'PENDING' OR :state = 'FAILED')
                                  THEN sync_attempts + 1 ELSE sync_attempts END
         WHERE id = :id
         """
@@ -77,6 +77,7 @@ interface CaptureDao {
         serverId: String?,
         error: String?,
         nextAttemptAt: Long?,
+        countsAsAttempt: Boolean = true,
     )
 
     @Query("UPDATE captures SET user_confirmed = 1 WHERE id = :id")

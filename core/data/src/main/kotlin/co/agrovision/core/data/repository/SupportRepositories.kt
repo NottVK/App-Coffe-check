@@ -12,11 +12,18 @@ import co.agrovision.core.common.AgroDispatcher
 import co.agrovision.core.common.AgroResult
 import co.agrovision.core.common.Dispatcher
 import co.agrovision.core.datastore.AccountStore
+import co.agrovision.core.datastore.SessionTokenStore
 import co.agrovision.core.model.DomainError
 import co.agrovision.core.model.capture.GeoPoint
 import co.agrovision.core.model.identity.Account
+import co.agrovision.core.model.identity.CoffeeVariety
+import co.agrovision.core.model.identity.PlantingAge
+import co.agrovision.core.model.identity.ProducerProfile
+import co.agrovision.core.model.identity.UserTier
+import co.agrovision.core.model.port.AccountGateway
 import co.agrovision.core.model.port.AccountRepository
 import co.agrovision.core.model.port.Clock
+import co.agrovision.core.model.port.ProfileRegistration
 import co.agrovision.core.model.port.LocationProvider
 import co.agrovision.core.model.port.TelemetryRecorder
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -29,17 +36,21 @@ import javax.inject.Singleton
 /**
  * Cuenta del productor.
  *
- * ⚠️ **Sin backend todavía.** El registro por OTP (§6.1, Fase 10) no existe, así
- * que `requestOtp` y `verifyOtp` devuelven `NoConnection`.
+ * El registro NO es un muro: el nivel T0 cubre escanear sin límite, catálogo
+ * completo, historial local, correcciones y OTA de modelo. La cuenta solo hace
+ * falta para que una Solicitud de Revisión llegue a un agrónomo, y hasta entonces
+ * la cola local la retiene sin perder nada (§6.3).
  *
- * Que eso NO impida usar la app es el punto entero del diseño: el nivel T0 cubre
- * escanear sin límite, catálogo completo, historial local, correcciones y OTA de
- * modelo. La cuenta solo hace falta para que una Solicitud de Revisión llegue a
- * un agrónomo, y hasta entonces la cola local la retiene sin perder nada (§6.3).
+ * Niveles con el backend actual:
+ *  - OTP validado → T1. Hay JWT, pero el backend no acepta solicitudes todavía.
+ *  - Perfil registrado en `productores/me` → T2. Es lo único que el backend exige
+ *    para aceptar solicitudes; no hay aprobación de administrador.
  */
 @Singleton
 class AccountRepositoryImpl @Inject constructor(
     private val store: AccountStore,
+    private val tokens: SessionTokenStore,
+    private val gateway: AccountGateway,
     private val clock: Clock,
 ) : AccountRepository {
 
@@ -47,22 +58,133 @@ class AccountRepositoryImpl @Inject constructor(
 
     override suspend fun current(): Account = store.current()
 
+    /** El backend aún no expone la vinculación del `device_id`. */
     override suspend fun linkAnonymousDevice(phone: String): AgroResult<Account, DomainError> =
         AgroResult.failure(DomainError.NoConnection)
 
     override suspend fun requestOtp(phone: String): AgroResult<Unit, DomainError> =
-        AgroResult.failure(DomainError.NoConnection)
+        gateway.requestOtp(phone.trim())
 
     override suspend fun verifyOtp(
         phone: String,
         code: String,
-    ): AgroResult<Account, DomainError> = AgroResult.failure(DomainError.NoConnection)
+    ): AgroResult<Account, DomainError> {
+        val normalizedPhone = phone.trim()
+        val token = when (val result = gateway.verifyOtp(normalizedPhone, code.trim())) {
+            is AgroResult.Failure -> return result
+            is AgroResult.Success -> result.value
+        }
+        tokens.save(token)
 
-    override suspend fun refreshValidationStatus(): AgroResult<Account, DomainError> =
-        AgroResult.failure(DomainError.NoConnection)
+        val now = clock.nowEpochMillis()
+        store.update { account ->
+            account.copy(
+                tier = maxOf(account.tier, UserTier.T1_REGISTRADO),
+                phone = normalizedPhone,
+                registeredAtEpochMillis = account.registeredAtEpochMillis ?: now,
+                // La cola retenida por el 401 se reanuda en la próxima
+                // sincronización: la compuerta vuelve a dejar pasar.
+                sessionExpired = false,
+            )
+        }
 
-    override suspend fun setTrainingConsent(granted: Boolean) {
+        // Un productor que reinstala ya tiene perfil: se le devuelve a T2 sin
+        // pedirle otra vez los datos de la finca. Si esto falla la sesión sigue
+        // siendo válida; el perfil se vuelve a consultar más tarde.
+        return when (val refreshed = refreshValidationStatus()) {
+            is AgroResult.Success -> refreshed
+            is AgroResult.Failure -> AgroResult.success(store.current())
+        }
+    }
+
+    override suspend fun refreshValidationStatus(): AgroResult<Account, DomainError> {
+        if (tokens.accessToken() == null) return AgroResult.failure(DomainError.NotSignedIn)
+        return when (val result = gateway.fetchProducerProfile()) {
+            is AgroResult.Failure -> expireSessionOn(result)
+            is AgroResult.Success -> AgroResult.success(applyProfile(result.value))
+        }
+    }
+
+    override suspend fun saveProducerProfile(
+        profile: ProducerProfile,
+    ): AgroResult<Account, DomainError> {
+        if (tokens.accessToken() == null) return AgroResult.failure(DomainError.NotSignedIn)
+        val invalid = profile.invalidFields()
+        if (invalid.isNotEmpty()) {
+            return AgroResult.failure(DomainError.InvalidProducerProfile(invalid))
+        }
+        val clean = profile.trimmed()
+        return when (val result = gateway.saveProducerProfile(clean)) {
+            is AgroResult.Failure -> expireSessionOn(result)
+            is AgroResult.Success -> when (result.value) {
+                ProfileRegistration.CREATED -> AgroResult.success(applyProfile(clean))
+                // 409: ya había perfil y no se puede editar. Vale el del
+                // servidor, no el que se acaba de escribir.
+                ProfileRegistration.ALREADY_REGISTERED -> refreshValidationStatus()
+            }
+        }
+    }
+
+    /**
+     * Local primero, porque es lo que el productor eligió. Pero si tiene sesión,
+     * la revocación tiene que llegar al servidor para excluir sus fotos de las
+     * siguientes instantáneas del dataset: si falla, se devuelve el error.
+     */
+    override suspend fun setTrainingConsent(granted: Boolean): AgroResult<Unit, DomainError> {
         store.update { it.copy(trainingConsent = granted) }
+        if (tokens.accessToken() == null) {
+            // Anónimo: el consentimiento solo existe en el teléfono. Registrado
+            // con la sesión vencida: el servidor aún no lo sabe, y la interfaz
+            // tiene que pedir que entre de nuevo en vez de darlo por hecho.
+            return if (store.current().tier == UserTier.T0_ANONIMO) {
+                AgroResult.unit
+            } else {
+                AgroResult.failure(DomainError.NotSignedIn)
+            }
+        }
+        return expireSessionOn(gateway.setTrainingConsent(granted))
+    }
+
+    override suspend fun markSessionExpired() {
+        tokens.clear()
+        store.update { account ->
+            // Un anónimo no tiene sesión que vencer.
+            account.copy(sessionExpired = account.tier != UserTier.T0_ANONIMO)
+        }
+    }
+
+    override suspend fun updateFarmDetails(variety: CoffeeVariety, age: PlantingAge) {
+        store.update { it.copy(coffeeVariety = variety, plantingAge = age) }
+    }
+
+    /** Un 401 en cualquier llamada autenticada vence la sesión. */
+    private suspend fun <T> expireSessionOn(
+        result: AgroResult<T, DomainError>,
+    ): AgroResult<T, DomainError> {
+        if (result is AgroResult.Failure && result.error == DomainError.NotSignedIn) {
+            markSessionExpired()
+        }
+        return result
+    }
+
+    private suspend fun applyProfile(profile: ProducerProfile?): Account {
+        val now = clock.nowEpochMillis()
+        store.update { account ->
+            if (profile == null) {
+                account.copy(tier = UserTier.T1_REGISTRADO)
+            } else {
+                account.copy(
+                    tier = UserTier.T2_VALIDADO,
+                    displayName = profile.fullName,
+                    farmName = profile.farmName,
+                    vereda = profile.vereda,
+                    municipality = profile.municipality,
+                    trainingConsent = profile.trainingConsent,
+                    validatedAtEpochMillis = account.validatedAtEpochMillis ?: now,
+                )
+            }
+        }
+        return store.current()
     }
 }
 

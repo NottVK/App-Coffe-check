@@ -5,6 +5,7 @@ import co.agrovision.core.model.DomainError
 import co.agrovision.core.model.capture.Capture
 import co.agrovision.core.model.mlmodel.ModelManifest
 import co.agrovision.core.model.pest.PestTaxon
+import co.agrovision.core.model.review.RemoteReviewStatus
 import co.agrovision.core.model.review.ReviewRequest
 
 /**
@@ -42,10 +43,15 @@ interface SyncGateway {
         etag: String?,
     ): AgroResult<CatalogDelta, DomainError>
 
-    /** Resoluciones de agrónomo. Quedan consultables sin conexión. */
+    /**
+     * Estado en el servidor de las solicitudes del productor, con la resolución
+     * del agrónomo cuando la hay. Devuelve estados y no `ReviewRequest` completas
+     * porque las imágenes solo existen en el teléfono: el repositorio fusiona el
+     * estado sobre la fila local, que queda consultable sin conexión.
+     */
     suspend fun fetchMyResolutions(
         sinceEpochMillis: Long?,
-    ): AgroResult<List<ReviewRequest>, DomainError>
+    ): AgroResult<List<RemoteReviewStatus>, DomainError>
 
     suspend fun registerPushToken(token: String): AgroResult<Unit, DomainError>
 
@@ -75,6 +81,9 @@ data class UploadOutcome(
      *  clave (§15.3). */
     val presignedImageUrl: String?,
     val rejectionReason: String?,
+    /** Solicitudes de revisión: una URL prefirmada POR FOTO, por id de imagen.
+     *  Una solicitud tiene varias tomas y cada una va a su propia clave. */
+    val imageUploadUrls: Map<String, String> = emptyMap(),
 )
 
 enum class UploadStatus {

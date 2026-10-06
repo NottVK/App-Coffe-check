@@ -91,3 +91,18 @@ enum class ResolutionType {
      *  de calidad necesita ajuste. */
     UNUSABLE,
 }
+
+/**
+ * Lo que el servidor sabe de una solicitud (`GET v1/review-requests/mine`).
+ *
+ * [requestId] es el UUID que generó el teléfono; si el servidor respondiera con
+ * su propio id, el repositorio también lo busca por `serverId`.
+ */
+data class RemoteReviewStatus(
+    val requestId: String,
+    val status: ReviewStatus,
+    val resolution: ReviewResolution?,
+    /** Marca de tiempo del SERVIDOR de la última modificación. Solo con ella se
+     *  avanza el cursor incremental: el reloj del teléfono no es confiable. */
+    val updatedAtEpochMillis: Long?,
+)
