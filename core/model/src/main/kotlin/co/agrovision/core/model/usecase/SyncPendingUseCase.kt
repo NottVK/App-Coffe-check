@@ -90,33 +90,10 @@ class SyncPendingUseCase @Inject constructor(
         var uploaded = 0
         var failed = 0
 
-        // ── 1. Solicitudes de revisión ──
-        val reviewBatch = reviews.nextBatchToUpload(AgroConstants.Sync.BATCH_SIZE, now)
-        if (reviewBatch.isNotEmpty()) {
-            // Variedad y edad del cafetal viajan en la nota (ver `withFarmContext`).
-            val outgoing = reviewBatch.map { it.withFarmContext(current) }
-            when (val result = gateway.uploadReviewRequests(outgoing)) {
-                is AgroResult.Failure -> {
-                    // Sesión vencida: las filas no se tocan. Ni un reintento
-                    // gastado ni un FAILED por algo que no es culpa del lote.
-                    if (result.error == DomainError.NotSignedIn) {
-                        return signInRequired(trigger, uploaded, failed)
-                    }
-                    reviewBatch.forEach { review ->
-                        failed++
-                        retryReview(review, describe(result.error), now)
-                    }
-                }
-                is AgroResult.Success -> {
-                    val reconciled = reconcileReviews(reviewBatch, result.value, now)
-                    uploaded += reconciled.submitted
-                    failed += reconciled.failed
-                    if (reconciled.sessionExpired) return signInRequired(trigger, uploaded, failed)
-                }
-            }
-        }
-
-        // ── 2 y 3. Correcciones y capturas confirmadas ──
+        // ── 1 y 2. Capturas y solicitudes de revisión ──
+        // Las solicitudes guardan la versión del modelo de su captura. Por eso las capturas
+        // se sincronizan primero: el servidor puede resolver el captureId antes de crear la
+        // solicitud y evitar que el panel la muestre como "Sin versión".
         // `nextBatchToUpload` ya devuelve las correcciones primero: el orden vive
         // en la consulta SQL, no en un `sortedBy` en memoria sobre una lista que
         // podría tener miles de filas.
@@ -150,6 +127,30 @@ class SyncPendingUseCase @Inject constructor(
                     }
                 }
                 is AgroResult.Success -> uploaded += reconcileCaptures(captureBatch, result.value, now)
+            }
+        }
+
+        // ── 3. Solicitudes de revisión ──
+        val reviewBatch = reviews.nextBatchToUpload(AgroConstants.Sync.BATCH_SIZE, now)
+        if (reviewBatch.isNotEmpty()) {
+            // Variedad y edad del cafetal viajan en la nota (ver `withFarmContext`).
+            val outgoing = reviewBatch.map { it.withFarmContext(current) }
+            when (val result = gateway.uploadReviewRequests(outgoing)) {
+                is AgroResult.Failure -> {
+                    if (result.error == DomainError.NotSignedIn) {
+                        return signInRequired(trigger, uploaded, failed)
+                    }
+                    reviewBatch.forEach { review ->
+                        failed++
+                        retryReview(review, describe(result.error), now)
+                    }
+                }
+                is AgroResult.Success -> {
+                    val reconciled = reconcileReviews(reviewBatch, result.value, now)
+                    uploaded += reconciled.submitted
+                    failed += reconciled.failed
+                    if (reconciled.sessionExpired) return signInRequired(trigger, uploaded, failed)
+                }
             }
         }
 
