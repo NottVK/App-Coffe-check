@@ -76,6 +76,8 @@ data class ReviewRequestDto(
     val createdAt: Long,
     val location: LocationDto? = null,
     val images: List<ReviewImageDto>,
+    /** Versión del modelo que hizo la lectura: el servidor la usa si no tiene la captura. */
+    val modelVersion: String? = null,
 )
 
 @Serializable

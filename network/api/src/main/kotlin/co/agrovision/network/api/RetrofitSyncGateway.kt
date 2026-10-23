@@ -283,6 +283,7 @@ private fun ReviewRequest.toDto() = ReviewRequestDto(
     noteText = noteText,
     createdAt = createdAtEpochMillis,
     location = location?.let { LocationDto(it.latitude, it.longitude, it.accuracyMeters) },
+    modelVersion = modelVersion,
     images = images.map { image ->
         ReviewImageDto(
             id = image.id,

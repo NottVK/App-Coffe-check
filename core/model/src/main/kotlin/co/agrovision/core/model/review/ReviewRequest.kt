@@ -30,6 +30,9 @@ data class ReviewRequest(
     val status: ReviewStatus,
     val resolution: ReviewResolution?,
     val sync: SyncStatus,
+    /** Versión del modelo que hizo la lectura. No se guarda: se toma de la captura al
+     *  enviar, para que el servidor la conozca aunque esa captura nunca se haya subido. */
+    val modelVersion: String? = null,
 ) {
     val isResolved: Boolean get() = status == ReviewStatus.RESOLVED
 }

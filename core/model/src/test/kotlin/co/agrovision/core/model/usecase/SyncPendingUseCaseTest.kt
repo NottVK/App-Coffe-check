@@ -192,8 +192,8 @@ class SyncPendingUseCaseTest {
         coVerify(exactly = 1) { account.markSessionExpired() }
         // Ni reintento gastado ni FAILED: la fila no se toca.
         coVerify(exactly = 0) { reviews.updateSyncState(any(), any(), any(), any(), any(), any()) }
-        // Y no se sigue con capturas ni estados con un token que ya no sirve.
-        coVerify(exactly = 0) { captures.nextBatchToUpload(any(), any()) }
+        // Las capturas van primero y aquí no había ninguna; con el token vencido no se
+        // sigue pidiendo el estado de las solicitudes.
         assertTrue(gateway.requestedCursors.isEmpty())
     }
 

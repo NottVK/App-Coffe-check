@@ -134,7 +134,11 @@ class SyncPendingUseCase @Inject constructor(
         val reviewBatch = reviews.nextBatchToUpload(AgroConstants.Sync.BATCH_SIZE, now)
         if (reviewBatch.isNotEmpty()) {
             // Variedad y edad del cafetal viajan en la nota (ver `withFarmContext`).
-            val outgoing = reviewBatch.map { it.withFarmContext(current) }
+            val outgoing = reviewBatch.map { review ->
+                review.withFarmContext(current).copy(
+                    modelVersion = review.captureId?.let { captures.findById(it)?.modelVersion },
+                )
+            }
             when (val result = gateway.uploadReviewRequests(outgoing)) {
                 is AgroResult.Failure -> {
                     if (result.error == DomainError.NotSignedIn) {
