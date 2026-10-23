@@ -362,6 +362,7 @@ class SyncPendingUseCaseTest {
 
         override suspend fun fetchCatalogDelta(sinceEpochMillis: Long?, etag: String?) = unused()
         override suspend fun registerPushToken(token: String) = unused()
+        override suspend fun postFieldMetrics(metrics: Map<String, String>) = unused()
         override suspend fun fetchModelManifest(appVersion: String, deviceId: String) = unused()
 
         private fun unused(): Nothing = error("No lo usa esta prueba")

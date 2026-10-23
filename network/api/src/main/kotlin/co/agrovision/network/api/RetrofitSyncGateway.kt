@@ -222,6 +222,21 @@ class RetrofitSyncGateway @Inject constructor(
             }.map { }
         }
 
+    override suspend fun postFieldMetrics(
+        metrics: Map<String, String>,
+    ): AgroResult<Unit, DomainError> = withContext(io) {
+        try {
+            val response = publicApi.postFieldMetrics(metrics)
+            if (response.isSuccessful) {
+                AgroResult.unit
+            } else {
+                AgroResult.failure(DomainError.RemoteFailure(response.code(), response.message()))
+            }
+        } catch (error: IOException) {
+            AgroResult.failure(DomainError.NoConnection)
+        }
+    }
+
     // ── Utilidades ───────────────────────────────────────────────────────────
 
     private inline fun <T> request(block: () -> Response<T>): AgroResult<T, DomainError> = try {

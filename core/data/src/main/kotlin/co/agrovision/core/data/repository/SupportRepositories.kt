@@ -12,6 +12,7 @@ import co.agrovision.core.common.AgroDispatcher
 import co.agrovision.core.common.AgroResult
 import co.agrovision.core.common.Dispatcher
 import co.agrovision.core.datastore.AccountStore
+import co.agrovision.core.datastore.DeviceIdentityStore
 import co.agrovision.core.datastore.SessionTokenStore
 import co.agrovision.core.model.DomainError
 import co.agrovision.core.model.capture.GeoPoint
@@ -22,12 +23,19 @@ import co.agrovision.core.model.identity.ProducerProfile
 import co.agrovision.core.model.identity.UserTier
 import co.agrovision.core.model.port.AccountGateway
 import co.agrovision.core.model.port.AccountRepository
+import co.agrovision.core.model.port.AppVersionProvider
 import co.agrovision.core.model.port.Clock
 import co.agrovision.core.model.port.ProfileRegistration
 import co.agrovision.core.model.port.LocationProvider
+import co.agrovision.core.model.port.SyncGateway
 import co.agrovision.core.model.port.TelemetryRecorder
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -240,20 +248,30 @@ class LocationProviderImpl @Inject constructor(
 }
 
 /**
- * Telemetría de campo (§19.2).
+ * Telemetría de campo (§19.2): cada escaneo, corrección y actualización de modelo se envía a
+ * `public/v1/telemetry/field-metrics`, que es lo que llena el tablero del panel y permite ver
+ * cómo se comporta cada versión del modelo en campo.
  *
- * ⚠️ **Solo registra en logcat por ahora.** El endpoint
- * `/public/v1/telemetry/field-metrics` existe en el contrato pero no hay backend
- * que lo reciba.
+ * Es anónima a propósito: lleva el identificador de la instalación, la versión de la app y los
+ * datos del evento, nunca la identidad del productor, la imagen ni la ubicación. Por eso se envía
+ * aunque no haya consentimiento de entrenamiento.
  *
- * Conviene ser explícito sobre lo que eso significa: **los cuatro indicadores de
- * producto no se están midiendo.** En particular la tasa de no reconocimiento y
- * la tasa de corrección, que son dos de las cuatro señales que disparan la
- * reversión de un modelo (§8.4). Hasta que esto suba datos, una regresión del
- * modelo en campo no la detecta nadie.
+ * Nunca estorba a quien la llama: el envío corre en su propio alcance y un fallo no se propaga.
+ * Sin conexión los eventos esperan en una cola en memoria (hasta [MAX_PENDING]) y salen en el
+ * siguiente envío; si la app se cierra antes, se pierden, y para métricas agregadas es aceptable.
  */
 @Singleton
-class TelemetryRecorderImpl @Inject constructor() : TelemetryRecorder {
+class TelemetryRecorderImpl @Inject constructor(
+    private val gateway: SyncGateway,
+    private val identity: DeviceIdentityStore,
+    private val appVersion: AppVersionProvider,
+    private val clock: Clock,
+    @Dispatcher(AgroDispatcher.IO) io: CoroutineDispatcher,
+) : TelemetryRecorder {
+
+    private val scope = CoroutineScope(SupervisorJob() + io)
+    private val pending = ArrayDeque<Map<String, String>>()
+    private val sending = Mutex()
 
     override suspend fun recordScan(
         modelVersion: String,
@@ -262,8 +280,15 @@ class TelemetryRecorderImpl @Inject constructor() : TelemetryRecorder {
         latencyMillis: Long,
         delegate: String,
     ) {
-        Log.i(TAG, "escaneo modelo=$modelVersion resultado=$outcome conf=$confidence " +
-            "latencia=${latencyMillis}ms delegate=$delegate")
+        Log.i(TAG, "escaneo modelo=$modelVersion resultado=$outcome conf=$confidence latencia=${latencyMillis}ms")
+        enqueue(
+            "scan",
+            "modelVersion" to modelVersion,
+            "outcome" to outcome,
+            "confidence" to confidence?.takeIf { it.isFinite() }?.coerceIn(0f, 1f)?.toString(),
+            "latencyMillis" to latencyMillis.coerceAtLeast(0L).toString(),
+            "delegate" to delegate.takeIf { it.isNotBlank() },
+        )
     }
 
     override suspend fun recordCorrection(
@@ -272,6 +297,12 @@ class TelemetryRecorderImpl @Inject constructor() : TelemetryRecorder {
         toClassId: String,
     ) {
         Log.i(TAG, "corrección modelo=$modelVersion de=$fromClassId a=$toClassId")
+        enqueue(
+            "correction",
+            "modelVersion" to modelVersion,
+            "fromClassId" to fromClassId,
+            "toClassId" to toClassId,
+        )
     }
 
     override suspend fun recordModelUpdate(
@@ -280,9 +311,50 @@ class TelemetryRecorderImpl @Inject constructor() : TelemetryRecorder {
         success: Boolean,
     ) {
         Log.i(TAG, "actualización modelo $fromVersion → $toVersion éxito=$success")
+        enqueue(
+            "model_update",
+            "fromVersion" to fromVersion,
+            "toVersion" to toVersion,
+            "success" to success.toString(),
+        )
+    }
+
+    private suspend fun enqueue(event: String, vararg fields: Pair<String, String?>) {
+        val metric = buildMap {
+            put("event", event)
+            put("installationId", identity.deviceId())
+            put("appVersion", appVersion.versionName())
+            put("occurredAt", clock.nowEpochMillis().toString())
+            fields.forEach { (key, value) -> if (value != null) put(key, value) }
+        }
+
+        scope.launch {
+            sending.withLock {
+                pending.addLast(metric)
+                while (pending.size > MAX_PENDING) pending.removeFirst()
+
+                // En orden; al primer fallo se detiene y lo que queda espera al siguiente evento
+                while (pending.isNotEmpty()) {
+                    when (val result = gateway.postFieldMetrics(pending.first())) {
+                        is AgroResult.Success -> pending.removeFirst()
+                        is AgroResult.Failure -> {
+                            // Un rechazo del servidor (400) no mejora reintentando: se descarta
+                            val rejected = (result.error as? DomainError.RemoteFailure)?.httpCode in 400..499
+                            if (rejected) {
+                                Log.w(TAG, "métrica rechazada, se descarta: ${result.error}")
+                                pending.removeFirst()
+                                continue
+                            }
+                            return@withLock
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private companion object {
         const val TAG = "AgroVision.Telemetry"
+        const val MAX_PENDING = 200
     }
 }

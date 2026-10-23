@@ -56,6 +56,12 @@ interface SyncGateway {
     suspend fun registerPushToken(token: String): AgroResult<Unit, DomainError>
 
     /**
+     * Telemetría de campo anónima (`public/v1/telemetry/field-metrics`): sin JWT y sin datos
+     * del productor. Es lo que llena el tablero de telemetría del panel.
+     */
+    suspend fun postFieldMetrics(metrics: Map<String, String>): AgroResult<Unit, DomainError>
+
+    /**
      * Manifiesto del modelo que le corresponde a ESTE dispositivo (§8.2).
      *
      * Vive en el puerto y no se llama al servicio HTTP directamente para que la

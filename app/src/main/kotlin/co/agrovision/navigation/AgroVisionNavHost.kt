@@ -100,6 +100,30 @@ private val BOTTOM_DESTINATIONS = listOf(
     BottomDestination(AgroVisionDestinations.HISTORY, Icons.Filled.History, R.string.nav_historial),
 )
 
+/**
+ * Cambio de pestaña de la barra inferior.
+ *
+ * Inicio es la raíz del grafo: navegar «hacia» ella con `restoreState` falla en silencio cuando
+ * ya está en la pila (por ejemplo tras entrar a Plagas desde un botón de Inicio), y el botón
+ * deja de responder. A la raíz se vuelve desapilando, no navegando.
+ */
+private fun NavHostController.navigateToTab(route: String) {
+    if (route == AgroVisionDestinations.HOME) {
+        if (!popBackStack(AgroVisionDestinations.HOME, inclusive = false)) {
+            navigate(AgroVisionDestinations.HOME) { launchSingleTop = true }
+        }
+        return
+    }
+
+    navigate(route) {
+        // Sin esto, alternar entre pestañas apila destinos indefinidamente y el botón
+        // atrás recorre todo el historial de pestañeo.
+        popUpTo(graph.findStartDestination().id) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
+    }
+}
+
 @Composable
 fun AgroVisionNavHost(
     navController: NavHostController = rememberNavController(),
@@ -133,18 +157,7 @@ fun AgroVisionNavHost(
                             ?.any { it.route == destination.route } == true
                         NavigationBarItem(
                             selected = selected,
-                            onClick = {
-                                navController.navigate(destination.route) {
-                                    // Sin esto, alternar entre pestañas apila
-                                    // destinos indefinidamente y el botón atrás
-                                    // recorre todo el historial de pestañeo.
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
+                            onClick = { navController.navigateToTab(destination.route) },
                             icon = {
                                 val count = if (destination.route == AgroVisionDestinations.REVIEW_LIST) unread else 0
                                 BadgedBox(
@@ -187,7 +200,7 @@ fun AgroVisionNavHost(
                     catalogCount = state.catalogCount,
                     featured = state.featured,
                     onAnalyze = { navController.navigate(AgroVisionDestinations.SCAN) },
-                    onCatalog = { navController.navigate(AgroVisionDestinations.CATALOG) },
+                    onCatalog = { navController.navigateToTab(AgroVisionDestinations.CATALOG) },
                     onPestClick = {
                         navController.navigate(AgroVisionDestinations.pestDetail(it))
                     },
