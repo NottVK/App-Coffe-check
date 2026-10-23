@@ -5,7 +5,12 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import co.agrovision.core.common.AgroDispatcher
 import co.agrovision.core.common.Dispatcher
+import co.agrovision.core.common.AgroResult
+import co.agrovision.core.model.mlmodel.ModelUpdateDecision
+import co.agrovision.core.model.port.ModelRegistryRepository
 import co.agrovision.core.model.port.SettingsRepository
+import co.agrovision.core.model.usecase.ActivateModelUseCase
+import co.agrovision.core.model.usecase.CheckModelUpdateUseCase
 import co.agrovision.core.model.usecase.SyncPendingUseCase
 import co.agrovision.core.model.usecase.SyncTrigger
 import kotlinx.coroutines.CoroutineDispatcher
@@ -39,6 +44,9 @@ class ForegroundSyncTrigger @Inject constructor(
     private val syncPending: SyncPendingUseCase,
     private val scheduler: SyncScheduler,
     private val settings: SettingsRepository,
+    private val registry: ModelRegistryRepository,
+    private val checkModelUpdate: CheckModelUpdateUseCase,
+    private val activateModel: ActivateModelUseCase,
     @Dispatcher(AgroDispatcher.IO) private val io: CoroutineDispatcher,
 ) : DefaultLifecycleObserver {
 
@@ -51,11 +59,22 @@ class ForegroundSyncTrigger @Inject constructor(
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
     }
 
+    private suspend fun installFirstModelIfMissing() {
+        if (registry.currentState().active != null) return
+
+        val decision = (checkModelUpdate(force = true) as? AgroResult.Success)?.value
+        if (decision is ModelUpdateDecision.Available) activateModel(decision.manifest)
+    }
+
     override fun onStart(owner: LifecycleOwner) {
         scope.launch {
             // No se comprueba conectividad aquí: el caso de uso ya lo hace y
             // devuelve `NoConnection` sin efectos. Duplicar la comprobación
             // abriría la puerta a que las dos discrepen.
+            // Sin modelo la app no puede escanear: se pide ya, sin esperar el ciclo de
+            // 24 h ni los minutos de retraso del trabajo en segundo plano.
+            installFirstModelIfMissing()
+
             syncPending(SyncTrigger.FOREGROUND)
 
             // Se encola además el trabajo en segundo plano. Si el fabricante lo
