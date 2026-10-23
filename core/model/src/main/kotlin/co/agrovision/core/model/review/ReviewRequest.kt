@@ -74,6 +74,9 @@ data class ReviewResolution(
 )
 
 enum class ResolutionType {
+    /** El agrónomo confirma lo que el modelo había dicho. */
+    CONFIRMED,
+
     /** Es una plaga que el modelo ya conoce pero no reconoció. Entra al dataset
      *  como caso difícil, con peso incrementado. */
     FALSE_NEGATIVE,

@@ -219,3 +219,7 @@ data class ProducerProfileResponseDto(
 
 @Serializable
 data class PushTokenDto(val token: String, val deviceId: String)
+
+/** `PATCH productores/me/consentimiento/revocar` exige confirmación explícita. */
+@Serializable
+data class ConsentRevocationDto(val confirmacion: Boolean)

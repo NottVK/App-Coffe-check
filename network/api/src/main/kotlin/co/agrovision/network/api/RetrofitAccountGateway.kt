@@ -7,6 +7,7 @@ import co.agrovision.core.model.DomainError
 import co.agrovision.core.model.identity.ProducerProfile
 import co.agrovision.core.model.port.AccountGateway
 import co.agrovision.core.model.port.ProfileRegistration
+import co.agrovision.network.api.dto.ConsentRevocationDto
 import co.agrovision.network.api.dto.OtpRequestDto
 import co.agrovision.network.api.dto.OtpVerificationDto
 import co.agrovision.network.api.dto.ProducerProfileRequestDto
@@ -118,7 +119,8 @@ class RetrofitAccountGateway @Inject constructor(
     override suspend fun setTrainingConsent(granted: Boolean): AgroResult<Unit, DomainError> =
         withContext(io) {
             call {
-                if (granted) api.grantTrainingConsent() else api.revokeTrainingConsent()
+                if (granted) api.grantTrainingConsent()
+                else api.revokeTrainingConsent(ConsentRevocationDto(confirmacion = true))
             }.unit()
         }
 

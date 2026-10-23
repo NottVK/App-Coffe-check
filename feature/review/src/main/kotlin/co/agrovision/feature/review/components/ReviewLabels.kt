@@ -110,6 +110,7 @@ val ReviewRequest.displayStatus: DisplayStatus
 
 val ResolutionType.label: Int
     get() = when (this) {
+        ResolutionType.CONFIRMED -> R.string.resolucion_confirmada
         ResolutionType.FALSE_NEGATIVE -> R.string.resolucion_falso_negativo
         ResolutionType.NEW_PEST -> R.string.resolucion_plaga_nueva
         ResolutionType.NOT_A_PEST -> R.string.resolucion_no_plaga

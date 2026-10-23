@@ -62,6 +62,13 @@ interface CaptureRepository {
         countsAsAttempt: Boolean = true,
     )
 
+    /** Devuelve a la cola lo que quedó en UPLOADING porque el proceso murió a
+     *  mitad del envío: nadie más lo volvería a recoger. */
+    suspend fun requeueStuckUploads()
+
+    /** El productor revocó el consentimiento: lo que no se subió ya no se sube. */
+    suspend fun skipUnsent()
+
     suspend fun confirmPrediction(id: String): AgroResult<Unit, DomainError>
 
     suspend fun correctPrediction(id: String, classId: String): AgroResult<Unit, DomainError>

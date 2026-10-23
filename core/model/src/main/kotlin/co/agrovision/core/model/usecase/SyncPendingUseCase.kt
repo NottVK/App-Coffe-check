@@ -17,6 +17,8 @@ import co.agrovision.core.model.port.UploadOutcome
 import co.agrovision.core.model.port.UploadStatus
 import co.agrovision.core.model.review.ReviewRequest
 import co.agrovision.core.model.review.ReviewStatus
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlin.math.min
 import kotlin.math.pow
 import javax.inject.Inject
@@ -45,13 +47,25 @@ class SyncPendingUseCase @Inject constructor(
     private val clock: Clock,
 ) {
 
-    suspend operator fun invoke(trigger: SyncTrigger): AgroResult<SyncSummary, DomainError> {
+    /** Una sola sincronización a la vez en todo el proceso: el disparador de primer
+     *  plano y el worker pueden coincidir, y dos lotes iguales en vuelo gastarían
+     *  datos del productor y se pisarían los estados. */
+    suspend operator fun invoke(trigger: SyncTrigger): AgroResult<SyncSummary, DomainError> =
+        running.withLock { run(trigger) }
+
+    private suspend fun run(trigger: SyncTrigger): AgroResult<SyncSummary, DomainError> {
+        // Con el cerrojo tomado nada puede estar subiendo de verdad: lo que siga en
+        // UPLOADING es de un proceso que murió a mitad del envío.
+        captures.requeueStuckUploads()
+
         val status = connectivity.current()
         if (!status.isOnline) return AgroResult.failure(DomainError.NoConnection)
 
         // ADR-008: la decisión sobre el gasto de datos le corresponde a quien lo
         // paga. No se impone red no medida; se respeta lo que el productor eligió.
         val preferences = settings.current()
+        // Revocar el consentimiento retira del envío lo que aún no salió del teléfono
+        if (!preferences.trainingConsent) captures.skipUnsent()
         if (status.isMetered && !preferences.syncNetworkPolicy.allowsMetered) {
             return AgroResult.success(SyncSummary.skipped(SkipReason.METERED_NETWORK))
         }
@@ -388,6 +402,7 @@ class SyncPendingUseCase @Inject constructor(
 
     private companion object {
         const val MAX_BACKOFF_EXPONENT = 10
+        val running = Mutex()
     }
 }
 

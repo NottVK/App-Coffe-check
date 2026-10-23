@@ -138,6 +138,7 @@
     <string name="resolucion_falso_negativo">Es una plaga conocida</string>
     <string name="resolucion_plaga_nueva">Es una plaga nueva</string>
     <string name="resolucion_no_plaga">No es una plaga</string>
+    <string name="resolucion_confirmada">El agrónomo confirmó el diagnóstico</string>
     <string name="resolucion_inutilizable">Las fotos no sirvieron</string>
 
     <string name="nav_solicitudes">Solicitudes</string>
