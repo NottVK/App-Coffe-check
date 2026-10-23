@@ -264,7 +264,8 @@ private fun Capture.toDto() = CaptureDto(
     gateOutcome = gateOutcome.name,
     // float16 en Base64: la mitad de bytes que float32, sin pérdida relevante
     // para la agrupación por similitud del servidor.
-    embedding = embedding?.let {
+    // Un modelo simple no tiene embedding: no se manda uno vacío
+    embedding = embedding?.takeIf { it.dimension > 0 }?.let {
         Base64.encodeToString(Float16Codec.encode(it.values), Base64.NO_WRAP)
     },
     userCorrectionClassId = userCorrectionClassId,
@@ -286,7 +287,7 @@ private fun ReviewRequest.toDto() = ReviewRequestDto(
         ReviewImageDto(
             id = image.id,
             angle = image.angle.name,
-            embedding = image.embedding?.let {
+            embedding = image.embedding?.takeIf { it.dimension > 0 }?.let {
                 Base64.encodeToString(Float16Codec.encode(it.values), Base64.NO_WRAP)
             },
         )
