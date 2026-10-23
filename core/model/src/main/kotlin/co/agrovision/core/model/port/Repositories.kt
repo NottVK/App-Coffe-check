@@ -216,8 +216,9 @@ interface ModelRegistryRepository {
     suspend fun currentState(): ModelRegistryState
 
     /** Consulta el manifiesto. Es la ÚNICA llamada de red del subsistema de
-     *  modelos, y vive fuera de los módulos aislados a propósito. */
-    suspend fun fetchManifest(): AgroResult<ModelManifest, DomainError>
+     *  modelos, y vive fuera de los módulos aislados a propósito.
+     *  `null` si el servidor aún no ha publicado ningún modelo (204). */
+    suspend fun fetchManifest(): AgroResult<ModelManifest?, DomainError>
 
     /**
      * Descarga, verifica SHA-256 en flujo, verifica firma Ed25519, escribe en la

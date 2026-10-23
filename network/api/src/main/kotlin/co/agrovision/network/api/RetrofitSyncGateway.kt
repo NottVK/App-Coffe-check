@@ -179,7 +179,7 @@ class RetrofitSyncGateway @Inject constructor(
     override suspend fun fetchModelManifest(
         appVersion: String,
         deviceId: String,
-    ): AgroResult<ModelManifest, DomainError> = withContext(io) {
+    ): AgroResult<ModelManifest?, DomainError> = withContext(io) {
         try {
             val response = publicApi.currentModel(appVersion = appVersion, deviceId = deviceId)
             val body = response.body()
@@ -188,6 +188,8 @@ class RetrofitSyncGateway @Inject constructor(
                     AgroResult.failure(
                         DomainError.RemoteFailure(response.code(), response.message())
                     )
+                // 204: el servidor todavía no publicó ningún modelo. No es un fallo.
+                response.code() == NO_CONTENT -> AgroResult.success(null)
                 body == null ->
                     AgroResult.failure(DomainError.RemoteFailure(response.code(), "sin cuerpo"))
                 else -> AgroResult.success(

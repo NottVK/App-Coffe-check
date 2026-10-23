@@ -70,7 +70,7 @@ interface SyncGateway {
     suspend fun fetchModelManifest(
         appVersion: String,
         deviceId: String,
-    ): AgroResult<ModelManifest, DomainError>
+    ): AgroResult<ModelManifest?, DomainError>
 }
 
 data class UploadOutcome(
