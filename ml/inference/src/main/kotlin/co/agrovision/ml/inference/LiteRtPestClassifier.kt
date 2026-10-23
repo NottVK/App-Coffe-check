@@ -57,6 +57,9 @@ class LiteRtPestClassifier @Inject constructor(
     @Dispatcher(AgroDispatcher.Inference)
     private val inferenceDispatcher: CoroutineDispatcher,
     private val listener: InferenceTelemetryListener,
+    // Las compuertas 2 y 3 se arman con la calibración y las etiquetas del modelo
+    // activo: sin esto el respaldo del modelo heredado se queda sin etiquetas
+    private val gateHolder: ActiveGateHolder,
 ) : PestClassifier {
 
     private var session: Session? = null
@@ -74,7 +77,10 @@ class LiteRtPestClassifier @Inject constructor(
         // Si ya hay una sesión de esta misma versión, no se reconstruye: crear el
         // intérprete es lo caro, y el puntero de ranura solo cambia tras una
         // actualización.
-        if (existing != null && existing.version == model.version) return@withContext
+        if (existing != null && existing.version == model.version) {
+            gateHolder.update(model)
+            return@withContext
+        }
 
         existing?.close()
         session = null
@@ -84,6 +90,8 @@ class LiteRtPestClassifier @Inject constructor(
             .getOrNull()
 
         session?.let { active ->
+            gateHolder.update(model)
+
             // Inferencia con tensor vacío. Fuerza la asignación de los buffers
             // nativos y la compilación del grafo por parte del delegate.
             runCatching { active.runEmpty() }

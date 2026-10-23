@@ -97,6 +97,7 @@ class ScanViewModel @Inject constructor(
                         latencyMillis = 0L,
                     )
                     else -> {
+                        Log.w(TAG, "el análisis falló: ${result.error}")
                         _state.value = result.error.toErrorState()
                         return@launch
                     }
