@@ -10,7 +10,7 @@
       `applicationId`, no la etiqueta. Pero sí lo nota el usuario, así que queda
       registrado aquí como decisión, no como descuido.
     -->
-    <string name="app_name">AgroVisión</string>
+    <string name="app_name">CoffeCheck</string>
 
     <!-- ── Inicio ─────────────────────────────────────────────────────────── -->
     <string name="home_saludo_manana">Buenos días</string>
