@@ -39,6 +39,8 @@ import co.agrovision.feature.catalog.CatalogViewModel
 import co.agrovision.feature.catalog.PestDetailScreen
 import co.agrovision.feature.catalog.PestDetailViewModel
 import co.agrovision.feature.review.list.ReviewBadgeViewModel
+import co.agrovision.settings.SettingsScreen
+import co.agrovision.settings.SettingsViewModel
 import co.agrovision.history.HistoryScreen
 import co.agrovision.history.HistoryViewModel
 import co.agrovision.home.HomeScreen
@@ -204,10 +206,22 @@ fun AgroVisionNavHost(
                     catalogCount = state.catalogCount,
                     featured = state.featured,
                     onAnalyze = { navController.navigate(AgroVisionDestinations.SCAN) },
-                    onCatalog = { navController.navigateToTab(AgroVisionDestinations.CATALOG) },
+                    onSettings = { navController.navigate(AgroVisionDestinations.SETTINGS) },
+                    onCatalog ={ navController.navigateToTab(AgroVisionDestinations.CATALOG) },
                     onPestClick = {
                         navController.navigate(AgroVisionDestinations.pestDetail(it))
                     },
+                )
+            }
+
+            composable(AgroVisionDestinations.SETTINGS) {
+                val viewModel: SettingsViewModel = hiltViewModel()
+                val state by viewModel.state.collectAsStateWithLifecycle()
+
+                SettingsScreen(
+                    state = state,
+                    viewModel = viewModel,
+                    onBack = { navController.popBackStack() },
                 )
             }
 

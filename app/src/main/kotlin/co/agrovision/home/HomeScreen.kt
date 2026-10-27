@@ -37,7 +37,9 @@ import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -100,6 +102,7 @@ fun HomeScreen(
     catalogCount: Int,
     featured: List<PestTaxon>,
     onAnalyze: () -> Unit,
+    onSettings: () -> Unit,
     onCatalog: () -> Unit,
     onPestClick: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -114,7 +117,10 @@ fun HomeScreen(
             .padding(bottom = AgroTheme.dimensions.gutterWide),
         verticalArrangement = Arrangement.spacedBy(AgroTheme.dimensions.gutter),
     ) {
-        TopRow(modifier = Modifier.padding(start = gutter, end = gutter, top = gutter))
+        TopRow(
+            onSettings = onSettings,
+            modifier = Modifier.padding(start = gutter, end = gutter, top = gutter),
+        )
 
         Column(
             modifier = Modifier.padding(horizontal = gutter),
@@ -157,7 +163,7 @@ private fun greetingRes(): Int {
 
 /** Marca a la izquierda. */
 @Composable
-private fun TopRow(modifier: Modifier = Modifier) {
+private fun TopRow(onSettings: () -> Unit, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -179,6 +185,13 @@ private fun TopRow(modifier: Modifier = Modifier) {
             Text(
                 text = stringResource(R.string.app_name),
                 style = MaterialTheme.typography.titleLarge,
+            )
+        }
+
+        IconButton(onClick = onSettings) {
+            Icon(
+                imageVector = Icons.Filled.Settings,
+                contentDescription = stringResource(R.string.ajustes_abrir),
             )
         }
     }
