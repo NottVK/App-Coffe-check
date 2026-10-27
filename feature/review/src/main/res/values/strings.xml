@@ -45,6 +45,7 @@
     <string name="solicitud_toca_repetir">Toca una foto para repetirla</string>
     <string name="solicitud_cultivo">Cultivo</string>
     <string name="solicitud_parte">Parte de la planta</string>
+    <string name="solicitud_variedad">Variedad del café</string>
     <string name="solicitud_nota">¿Qué has notado?</string>
     <string name="solicitud_nota_ayuda">Desde cuándo lo ves, si hay más plantas así, si aplicaste algo…</string>
     <string name="solicitud_cafetal">Tu cafetal</string>
@@ -116,8 +117,8 @@
     <string name="lista_titulo">Mis solicitudes</string>
     <string name="lista_subtitulo">Aquí llegan las respuestas del agrónomo.</string>
     <string name="lista_vacia_titulo">Aún no has enviado solicitudes</string>
-    <string name="lista_vacia_cuerpo">Cuando una foto no se reconozca, toca «Que lo revise un agrónomo».</string>
-    <string name="lista_analizar">Analizar una planta</string>
+    <string name="lista_vacia_cuerpo">Toca «Nueva solicitud» para enviar fotos de tu planta a un agrónomo.</string>
+    <string name="lista_nueva_solicitud">Nueva solicitud</string>
     <string name="lista_pendientes">%1$d por enviar</string>
     <string name="lista_pendientes_cuerpo">Se envían solas cuando haya señal.</string>
     <string name="lista_enviar_ahora">Enviar ahora</string>

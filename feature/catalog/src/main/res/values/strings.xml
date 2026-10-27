@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="catalogo_titulo">Plagas y problemas</string>
+    <string name="catalogo_titulo">Afecciones</string>
     <string name="catalogo_buscar">Buscar por nombre…</string>
     <string name="catalogo_vacio_titulo">Todavía no hay fichas</string>
     <string name="catalogo_vacio_cuerpo">Cuando el catálogo se sincronice verás aquí las plagas del cultivo de café.</string>

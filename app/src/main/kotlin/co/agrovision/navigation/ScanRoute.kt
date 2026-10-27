@@ -102,15 +102,3 @@ fun ScanRoute(
         }
     }
 }
-
-/** Marcador del historial hasta que exista `:feature:history`. */
-@Composable
-fun HistoryPlaceholder() {
-    EmptyState(
-        modifier = Modifier.fillMaxSize(),
-        title = "Historial en construcción",
-        body = "Aquí verás cada análisis que hagas, con su fecha y su resultado. " +
-            "Tus capturas ya se están guardando.",
-        icon = Icons.Filled.History,
-    )
-}

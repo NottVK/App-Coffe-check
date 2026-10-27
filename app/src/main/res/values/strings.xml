@@ -21,7 +21,7 @@
     <string name="home_analizar_ayuda">Toma la foto y te digo qué tiene</string>
     <string name="home_analizar_descripcion">Analizar una planta con la cámara</string>
     <string name="home_sin_senal">Funciona sin señal</string>
-    <string name="home_catalogo">Plagas y problemas</string>
+    <string name="home_catalogo">Afecciones</string>
     <string name="home_catalogo_detalle">%1$d fichas para consultar</string>
     <string name="home_catalogo_unidad">fichas de plagas</string>
     <string name="home_plagas_comunes">Afecciones del cultivo</string>
@@ -31,5 +31,11 @@
     <string name="nav_inicio">Inicio</string>
     <string name="nav_plagas">Afecciones</string>
     <string name="nav_historial">Historial</string>
+    <string name="historial_titulo">Historial</string>
+    <string name="historial_vacio_titulo">Aún no has analizado nada</string>
+    <string name="historial_vacio_cuerpo">Cada hoja que analices quedará aquí, con su fecha y su resultado.</string>
+    <string name="historial_sin_identificar">Sin identificar</string>
+    <string name="historial_foto_rechazada">Foto no válida</string>
+    <string name="historial_confianza">%1$d %%</string>
     <string name="scan_cerrar">Cerrar la cámara</string>
 </resources>

@@ -93,7 +93,7 @@ fun ReviewSentRoute(
 }
 
 @Composable
-fun ReviewListRoute(onSignIn: () -> Unit, onAnalyze: () -> Unit) {
+fun ReviewListRoute(onSignIn: () -> Unit, onNewRequest: () -> Unit) {
     val viewModel: ReviewListViewModel = hiltViewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -102,6 +102,6 @@ fun ReviewListRoute(onSignIn: () -> Unit, onAnalyze: () -> Unit) {
         onToggle = viewModel::onToggle,
         onSendNow = viewModel::onSendNow,
         onSignIn = onSignIn,
-        onAnalyze = onAnalyze,
+        onNewRequest = onNewRequest,
     )
 }

@@ -54,7 +54,7 @@ fun ReviewListScreen(
     onToggle: (ReviewRequest) -> Unit,
     onSendNow: () -> Unit,
     onSignIn: () -> Unit,
-    onAnalyze: () -> Unit,
+    onNewRequest: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val gutter = AgroTheme.dimensions.gutter
@@ -122,9 +122,9 @@ fun ReviewListScreen(
                     icon = Icons.Filled.Forum,
                     action = {
                         PrimaryFieldButton(
-                            text = stringResource(R.string.lista_analizar),
+                            text = stringResource(R.string.lista_nueva_solicitud),
                             icon = Icons.Filled.PhotoCamera,
-                            onClick = onAnalyze,
+                            onClick = onNewRequest,
                         )
                     },
                 )

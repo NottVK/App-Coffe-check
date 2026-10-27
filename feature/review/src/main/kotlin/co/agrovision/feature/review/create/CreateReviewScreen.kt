@@ -47,6 +47,7 @@ import co.agrovision.core.designsystem.component.PrimaryFieldButton
 import co.agrovision.core.designsystem.component.SecondaryFieldButton
 import co.agrovision.core.designsystem.text.resolve
 import co.agrovision.core.designsystem.theme.AgroTheme
+import co.agrovision.core.model.identity.CoffeeVariety
 import co.agrovision.core.model.pest.CropType
 import co.agrovision.core.model.pest.PlantOrgan
 import co.agrovision.core.model.review.CaptureAngle
@@ -345,6 +346,19 @@ private fun ReviewForm(
                     selected = state.plantOrgan,
                     label = { it.label() },
                     onSelect = { onIntent(CreateReviewIntent.SetOrgan(it)) },
+                )
+            }
+
+            Column(
+                modifier = Modifier.padding(horizontal = gutter),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                SectionTitle(stringResource(R.string.solicitud_variedad))
+                ChoiceGroup(
+                    options = CoffeeVariety.entries,
+                    selected = state.variety,
+                    label = { it.label },
+                    onSelect = { onIntent(CreateReviewIntent.SetVariety(it)) },
                 )
             }
 

@@ -7,6 +7,7 @@ import co.agrovision.core.common.AgroResult
 import co.agrovision.core.common.UiText
 import co.agrovision.core.model.identity.CoffeeVariety
 import co.agrovision.core.model.identity.PlantingAge
+import co.agrovision.core.model.identity.VARIETY_PREFIX
 import co.agrovision.core.model.pest.CropType
 import co.agrovision.core.model.pest.PlantOrgan
 import co.agrovision.core.model.port.AccountRepository
@@ -70,6 +71,7 @@ sealed interface CreateReviewIntent {
     data class RetakeAngle(val angle: CaptureAngle) : CreateReviewIntent
     data class SetCrop(val crop: CropType) : CreateReviewIntent
     data class SetOrgan(val organ: PlantOrgan) : CreateReviewIntent
+    data class SetVariety(val variety: CoffeeVariety) : CreateReviewIntent
     data class SetNote(val note: String) : CreateReviewIntent
     data object Submit : CreateReviewIntent
     data object Cancel : CreateReviewIntent
@@ -107,7 +109,8 @@ class CreateReviewViewModel @Inject constructor(
     private val createReviewRequest: CreateReviewRequestUseCase,
 ) : ViewModel() {
 
-    private val captureId: String = checkNotNull(savedState["captureId"])
+    /** `null` cuando la solicitud se abre desde «Nueva solicitud», sin un escaneo previo. */
+    private val captureId: String? = savedState.get<String>("captureId")?.takeIf { it != "ninguna" }
 
     private val _state = MutableStateFlow(CreateReviewState())
     val state: StateFlow<CreateReviewState> = _state.asStateFlow()
@@ -121,7 +124,7 @@ class CreateReviewViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            val capture = captures.findById(captureId)
+            val capture = captureId?.let { captures.findById(it) }
             val current = account.current()
             _state.update { state ->
                 state.copy(
@@ -148,6 +151,7 @@ class CreateReviewViewModel @Inject constructor(
             }
             is CreateReviewIntent.SetCrop -> _state.update { it.copy(cropType = intent.crop) }
             is CreateReviewIntent.SetOrgan -> _state.update { it.copy(plantOrgan = intent.organ) }
+            is CreateReviewIntent.SetVariety -> _state.update { it.copy(variety = intent.variety) }
             is CreateReviewIntent.SetNote -> _state.update { it.copy(note = intent.note) }
             CreateReviewIntent.Submit -> submit()
             CreateReviewIntent.Cancel -> cancel()
@@ -223,7 +227,12 @@ class CreateReviewViewModel @Inject constructor(
                     },
                     cropType = state.cropType,
                     plantOrgan = state.plantOrgan,
-                    noteText = state.note.trim().takeIf { it.isNotEmpty() },
+                    // La variedad elegida viaja al agrónomo en la nota, igual que
+                    // la del perfil (ver `withFarmContext`).
+                    noteText = listOfNotNull(
+                        state.variety?.let { "$VARIETY_PREFIX${it.label}" },
+                        state.note.trim().takeIf { it.isNotEmpty() },
+                    ).joinToString(NOTE_SEPARATOR).takeIf { it.isNotEmpty() },
                     noteAudioPath = null,
                 )
             )
@@ -262,3 +271,6 @@ class CreateReviewViewModel @Inject constructor(
         }
     }
 }
+
+/** Separa la variedad de lo que escribió el productor en la nota. */
+private val NOTE_SEPARATOR = "${Char(10)}${Char(10)}"

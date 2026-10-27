@@ -39,6 +39,8 @@ import co.agrovision.feature.catalog.CatalogViewModel
 import co.agrovision.feature.catalog.PestDetailScreen
 import co.agrovision.feature.catalog.PestDetailViewModel
 import co.agrovision.feature.review.list.ReviewBadgeViewModel
+import co.agrovision.history.HistoryScreen
+import co.agrovision.history.HistoryViewModel
 import co.agrovision.home.HomeScreen
 import co.agrovision.home.HomeViewModel
 
@@ -71,7 +73,9 @@ object AgroVisionDestinations {
     const val SETTINGS = "ajustes"
 
     fun pestDetail(pestId: String) = "catalogo/$pestId"
-    fun createReview(captureId: String) = "solicitudes/nueva/$captureId"
+    /** Sin `captureId`, la solicitud arranca directo en la toma guiada, sin pasar
+     *  por la cámara de «Analizar». */
+    fun createReview(captureId: String? = null) = "solicitudes/nueva/${captureId ?: "ninguna"}"
     fun reviewSent(reviewId: String) = "solicitudes/enviada/$reviewId"
 
     /** Con `reviewId`, al terminar sigue a «enviada». Sin él, vuelve atrás. */
@@ -281,7 +285,7 @@ fun AgroVisionNavHost(
             composable(AgroVisionDestinations.REVIEW_LIST) {
                 ReviewListRoute(
                     onSignIn = { navController.navigate(AgroVisionDestinations.signIn()) },
-                    onAnalyze = { navController.navigate(AgroVisionDestinations.SCAN) },
+                    onNewRequest = { navController.navigate(AgroVisionDestinations.createReview()) },
                 )
             }
 
@@ -310,9 +314,15 @@ fun AgroVisionNavHost(
             }
 
             composable(AgroVisionDestinations.HISTORY) {
-                // ⚠️ Pendiente. Se declara la ruta para que la barra inferior
-                // tenga tres destinos reales desde ya; la pantalla llega después.
-                HistoryPlaceholder()
+                val viewModel: HistoryViewModel = hiltViewModel()
+                val state by viewModel.state.collectAsStateWithLifecycle()
+
+                HistoryScreen(
+                    state = state,
+                    onItemClick = { item ->
+                        item.pestId?.let { navController.navigate(AgroVisionDestinations.pestDetail(it)) }
+                    },
+                )
             }
         }
     }
