@@ -29,7 +29,7 @@
 
     <!-- ── Navegación inferior ────────────────────────────────────────────── -->
     <string name="nav_inicio">Inicio</string>
-    <string name="nav_plagas">Plagas</string>
+    <string name="nav_plagas">Afecciones</string>
     <string name="nav_historial">Historial</string>
     <string name="scan_cerrar">Cerrar la cámara</string>
 </resources>
