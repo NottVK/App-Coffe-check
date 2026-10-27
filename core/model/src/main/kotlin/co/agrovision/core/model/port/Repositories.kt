@@ -74,6 +74,10 @@ interface CaptureRepository {
     suspend fun correctPrediction(id: String, classId: String): AgroResult<Unit, DomainError>
 
     suspend fun purgeExpired(nowEpochMillis: Long): Int
+
+    /** El productor borra un análisis de su historial. Quita la fila y las
+     *  imágenes, salvo las que una solicitud de revisión aún necesita. */
+    suspend fun delete(id: String)
 }
 
 interface PestCatalogRepository {

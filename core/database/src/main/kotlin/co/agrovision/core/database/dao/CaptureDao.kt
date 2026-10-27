@@ -132,6 +132,18 @@ interface CaptureDao {
     @Query("DELETE FROM captures WHERE id IN (:ids)")
     suspend fun deleteByIds(ids: List<String>): Int
 
+    /** Rutas de imagen que una solicitud de revisión sigue usando. La solicitud
+     *  nace de la foto del escaneo y comparte el archivo, así que borrarlo
+     *  rompería el envío. */
+    @Query(
+        """
+        SELECT image_path FROM review_request_images WHERE image_path IN (:paths)
+        UNION
+        SELECT thumbnail_path FROM review_request_images WHERE thumbnail_path IN (:paths)
+        """
+    )
+    suspend fun pathsUsedByReviews(paths: List<String>): List<String>
+
     /** Purga transaccional: se borran las filas y quien llama borra los archivos.
      *  Devolver las rutas antes de borrar evita quedarse con huérfanos en disco. */
     @Transaction

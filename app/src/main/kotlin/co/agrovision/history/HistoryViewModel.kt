@@ -8,10 +8,15 @@ import co.agrovision.core.model.port.CaptureRepository
 import co.agrovision.core.model.scan.GateOutcome
 import co.agrovision.core.model.usecase.SearchCatalogUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @Immutable
@@ -40,18 +45,25 @@ data class HistoryUiState(
  */
 @HiltViewModel
 class HistoryViewModel @Inject constructor(
-    captures: CaptureRepository,
+    private val captures: CaptureRepository,
     searchCatalog: SearchCatalogUseCase,
 ) : ViewModel() {
+
+    /** Filas que el productor acaba de quitar y aún puede deshacer. Se ocultan
+     *  al instante; el borrado real espera [UNDO_WINDOW_MS]. */
+    private val hiddenIds = MutableStateFlow<Set<String>>(emptySet())
+    private val pendingDeletes = mutableMapOf<String, Job>()
 
     val state: StateFlow<HistoryUiState> = combine(
         captures.observeHistory(),
         searchCatalog(""),
-    ) { history, catalog ->
+        hiddenIds,
+    ) { history, catalog, hidden ->
         val names = catalog.associate { it.id to it.commonName }
         HistoryUiState(
             loading = false,
             items = history
+                .filter { it.id !in hidden }
                 .sortedByDescending { it.capturedAtEpochMillis }
                 .map { it.toItem(names) },
         )
@@ -60,6 +72,27 @@ class HistoryViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5_000L),
         initialValue = HistoryUiState(),
     )
+
+    /** Oculta la fila y programa el borrado real. [undo] lo cancela. */
+    fun delete(id: String) {
+        hiddenIds.update { it + id }
+        pendingDeletes[id] = viewModelScope.launch {
+            delay(UNDO_WINDOW_MS)
+            captures.delete(id)
+            pendingDeletes.remove(id)
+            hiddenIds.update { it - id }
+        }
+    }
+
+    fun undo(id: String) {
+        pendingDeletes.remove(id)?.cancel()
+        hiddenIds.update { it - id }
+    }
+
+    private companion object {
+        /** Tiene que cubrir el tiempo que el aviso «Deshacer» está en pantalla. */
+        const val UNDO_WINDOW_MS = 6_000L
+    }
 }
 
 private fun Capture.toItem(names: Map<String, String>): HistoryItem {

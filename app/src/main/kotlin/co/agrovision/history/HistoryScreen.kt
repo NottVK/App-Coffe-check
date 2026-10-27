@@ -3,6 +3,7 @@ package co.agrovision.history
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -15,10 +16,22 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,6 +43,7 @@ import co.agrovision.core.designsystem.component.EmptyState
 import co.agrovision.core.designsystem.component.LocalImage
 import co.agrovision.core.designsystem.theme.AgroTheme
 import co.agrovision.core.model.scan.GateOutcome
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -42,39 +56,115 @@ private val DATE_FORMAT: DateTimeFormatter =
 fun HistoryScreen(
     state: HistoryUiState,
     onItemClick: (HistoryItem) -> Unit,
+    onDelete: (HistoryItem) -> Unit,
+    onUndo: (HistoryItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val gutter = AgroTheme.dimensions.gutter
+    val snackbars = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val deletedMessage = stringResource(R.string.historial_eliminado)
+    val undoLabel = stringResource(R.string.historial_deshacer)
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding(),
-    ) {
-        Text(
-            text = stringResource(R.string.historial_titulo),
-            style = MaterialTheme.typography.headlineMedium,
-            modifier = Modifier.padding(start = gutter, end = gutter, top = gutter, bottom = 8.dp),
-        )
-
-        if (!state.loading && state.items.isEmpty()) {
-            EmptyState(
-                title = stringResource(R.string.historial_vacio_titulo),
-                body = stringResource(R.string.historial_vacio_cuerpo),
-                icon = Icons.Filled.History,
-            )
-            return@Column
-        }
-
-        LazyColumn(
-            contentPadding = PaddingValues(start = gutter, end = gutter, top = 8.dp, bottom = gutter),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .statusBarsPadding(),
         ) {
-            items(state.items, key = { it.id }) { item ->
-                HistoryRow(item = item, onClick = { onItemClick(item) })
+            Text(
+                text = stringResource(R.string.historial_titulo),
+                style = MaterialTheme.typography.headlineMedium,
+                modifier = Modifier.padding(start = gutter, end = gutter, top = gutter, bottom = 8.dp),
+            )
+
+            if (!state.loading && state.items.isEmpty()) {
+                EmptyState(
+                    title = stringResource(R.string.historial_vacio_titulo),
+                    body = stringResource(R.string.historial_vacio_cuerpo),
+                    icon = Icons.Filled.History,
+                )
+            } else {
+                LazyColumn(
+                    contentPadding = PaddingValues(start = gutter, end = gutter, top = 8.dp, bottom = gutter),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    items(state.items, key = { it.id }) { item ->
+                        SwipeableRow(
+                            item = item,
+                            onClick = { onItemClick(item) },
+                            onDelete = {
+                                onDelete(item)
+                                // Un aviso a la vez: el nuevo reemplaza al anterior.
+                                scope.launch {
+                                    snackbars.currentSnackbarData?.dismiss()
+                                    val result = snackbars.showSnackbar(
+                                        message = deletedMessage,
+                                        actionLabel = undoLabel,
+                                        duration = SnackbarDuration.Short,
+                                    )
+                                    if (result == SnackbarResult.ActionPerformed) onUndo(item)
+                                }
+                            },
+                            modifier = Modifier.animateItem(),
+                        )
+                    }
+                }
             }
         }
+
+        SnackbarHost(
+            hostState = snackbars,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(16.dp),
+        )
+    }
+}
+
+/** Deslizar hacia la izquierda borra. Es el gesto que ya conoce quien usa
+ *  WhatsApp o el correo, y el aviso «Deshacer» cubre el deslizar sin querer. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeableRow(
+    item: HistoryItem,
+    onClick: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.EndToStart) {
+                onDelete()
+                true
+            } else {
+                false
+            }
+        },
+    )
+    SwipeToDismissBox(
+        state = dismissState,
+        modifier = modifier,
+        enableDismissFromStartToEnd = false,
+        backgroundContent = {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(MaterialTheme.colorScheme.errorContainer)
+                    .padding(horizontal = 20.dp),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Delete,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                )
+            }
+        },
+    ) {
+        HistoryRow(item = item, onClick = onClick)
     }
 }
 

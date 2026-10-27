@@ -34,6 +34,8 @@
     <string name="historial_titulo">Historial</string>
     <string name="historial_vacio_titulo">Aún no has analizado nada</string>
     <string name="historial_vacio_cuerpo">Cada hoja que analices quedará aquí, con su fecha y su resultado.</string>
+    <string name="historial_eliminado">Análisis eliminado</string>
+    <string name="historial_deshacer">Deshacer</string>
     <string name="historial_sin_identificar">Sin identificar</string>
     <string name="historial_foto_rechazada">Foto no válida</string>
     <string name="historial_confianza">%1$d %%</string>

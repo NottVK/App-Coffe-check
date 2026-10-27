@@ -322,6 +322,8 @@ fun AgroVisionNavHost(
                     onItemClick = { item ->
                         item.pestId?.let { navController.navigate(AgroVisionDestinations.pestDetail(it)) }
                     },
+                    onDelete = { viewModel.delete(it.id) },
+                    onUndo = { viewModel.undo(it.id) },
                 )
             }
         }

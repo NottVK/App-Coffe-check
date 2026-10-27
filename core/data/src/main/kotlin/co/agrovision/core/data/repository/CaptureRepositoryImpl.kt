@@ -109,6 +109,18 @@ class CaptureRepositoryImpl @Inject constructor(
      * En el orden correcto, el peor caso es un archivo huérfano en disco: molesto,
      * recuperable en la siguiente purga, y nunca visible para el productor.
      */
+    override suspend fun delete(id: String) {
+        withContext(io) {
+            val capture = dao.findById(id) ?: return@withContext
+            val paths = listOf(capture.imagePath, capture.thumbnailPath)
+            // Primero la fila y después los archivos: si el proceso muere en
+            // medio, queda un archivo huérfano y no una fila sin imagen.
+            dao.deleteByIds(listOf(id))
+            val inUse = dao.pathsUsedByReviews(paths).toSet()
+            images.delete(paths.filterNot { it in inUse })
+        }
+    }
+
     override suspend fun purgeExpired(nowEpochMillis: Long): Int = withContext(io) {
         val cutoff = nowEpochMillis - AgroConstants.Image.RETENTION.inWholeMilliseconds
         val purged = dao.purge(cutoff)
