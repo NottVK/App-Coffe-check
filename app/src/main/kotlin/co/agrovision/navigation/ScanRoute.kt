@@ -88,7 +88,7 @@ fun ScanRoute(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .statusBarsPadding()
-                    .padding(16.dp)
+                    .padding(start = 16.dp, top = 32.dp)
                     .size(48.dp)
                     .clip(CircleShape)
                     .background(Color.Black.copy(alpha = 0.45f)),

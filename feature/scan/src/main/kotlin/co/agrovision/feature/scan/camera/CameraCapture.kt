@@ -13,10 +13,20 @@ import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.CenterFocusStrong
+import androidx.compose.material.icons.filled.WbCloudy
+import androidx.compose.material.icons.filled.ZoomIn
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -56,6 +67,7 @@ import co.agrovision.core.designsystem.component.ShutterButton
 import co.agrovision.core.model.scan.RgbImage
 import co.agrovision.feature.scan.FramingGuidance
 import co.agrovision.feature.scan.R
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.Canvas
 
 /**
@@ -178,6 +190,18 @@ private fun CameraSurface(
 
         FramingGuide(modifier = Modifier.fillMaxSize())
 
+        // Solo en el análisis de una hoja. La toma guiada de una solicitud ya
+        // trae su propia instrucción (`hint`) y no lleva estos consejos.
+        // Va a la derecha del botón de cerrar (arriba a la izquierda, 48 dp).
+        if (hint == null) {
+            PhotoTips(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .statusBarsPadding()
+                    .padding(start = 76.dp, end = 16.dp, top = 26.dp),
+            )
+        }
+
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -264,6 +288,52 @@ private fun FramingGuide(modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * Consejos de encuadre, de uno en uno: rotan solos para no tapar la imagen con
+ * tres líneas a la vez. Son las mismas instrucciones que da la compuerta de
+ * calidad cuando rechaza una foto, dichas ANTES de tomarla.
+ */
+@Composable
+private fun PhotoTips(modifier: Modifier = Modifier) {
+    val tips = listOf(
+        Icons.Filled.ZoomIn to stringResource(R.string.camara_consejo_cerca),
+        Icons.Filled.WbCloudy to stringResource(R.string.camara_consejo_luz),
+        Icons.Filled.CenterFocusStrong to stringResource(R.string.camara_consejo_foco),
+    )
+    var index by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(TIP_MS)
+            index = (index + 1) % tips.size
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color.Black.copy(alpha = 0.55f))
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.camara_consejos),
+            style = MaterialTheme.typography.labelLarge,
+            color = Color.White.copy(alpha = 0.7f),
+        )
+        Crossfade(targetState = index, label = "consejo") { i ->
+            val (icon, text) = tips[i]
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Icon(imageVector = icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                Text(text = text, style = MaterialTheme.typography.bodyMedium, color = Color.White)
+            }
+        }
+    }
+}
+
 @Composable
 private fun GuidanceLabel(guidance: FramingGuidance, hint: String?) {
     val message = hint ?: stringResource(
@@ -293,6 +363,7 @@ private fun Context.hasCameraPermission(): Boolean =
     ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
         PackageManager.PERMISSION_GRANTED
 
+private const val TIP_MS = 3_000L
 private const val TAG = "AgroVision.Camera"
 private const val FRAME_FRACTION = 0.78f
 private const val CORNER_FRACTION = 0.12f

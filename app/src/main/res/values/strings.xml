@@ -20,15 +20,11 @@
     <string name="home_analizar">Analizar una hoja</string>
     <string name="home_analizar_ayuda">Toma la foto y te digo qué tiene</string>
     <string name="home_analizar_descripcion">Analizar una planta con la cámara</string>
-    <string name="home_consejos">Para una buena foto</string>
-    <string name="home_consejo_cerca">A un palmo de la hoja</string>
-    <string name="home_consejo_luz">Sombra clara, sin sol</string>
-    <string name="home_consejo_foco">Solo la parte afectada</string>
     <string name="home_sin_senal">Funciona sin señal</string>
     <string name="home_catalogo">Plagas y problemas</string>
     <string name="home_catalogo_detalle">%1$d fichas para consultar</string>
     <string name="home_catalogo_unidad">fichas de plagas</string>
-    <string name="home_plagas_comunes">Plagas comunes</string>
+    <string name="home_plagas_comunes">Afecciones del cultivo</string>
     <string name="home_ver_todas">Ver todas</string>
 
     <!-- ── Navegación inferior ────────────────────────────────────────────── -->

@@ -34,6 +34,11 @@
     <string name="camara_sin_permiso_cuerpo">Sin la cámara no puedo mirar la hoja. La foto se queda en tu teléfono.</string>
     <string name="camara_permitir">Permitir la cámara</string>
 
+    <string name="camara_consejos">Para una buena foto</string>
+    <string name="camara_consejo_cerca">A un palmo de la hoja</string>
+    <string name="camara_consejo_luz">Sombra clara, sin sol</string>
+    <string name="camara_consejo_foco">Solo la parte afectada</string>
+
     <!-- Guía de encuadre. Instrucciones, no diagnósticos. -->
     <string name="guia_acercate">Acércate más, como a un palmo</string>
     <string name="guia_alejate">Aléjate un poco</string>

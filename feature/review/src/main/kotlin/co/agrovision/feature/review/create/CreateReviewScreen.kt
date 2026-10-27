@@ -339,19 +339,6 @@ private fun ReviewForm(
                 modifier = Modifier.padding(horizontal = gutter),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                SectionTitle(stringResource(R.string.solicitud_cultivo))
-                ChoiceGroup(
-                    options = CropType.entries,
-                    selected = state.cropType,
-                    label = { it.label() },
-                    onSelect = { onIntent(CreateReviewIntent.SetCrop(it)) },
-                )
-            }
-
-            Column(
-                modifier = Modifier.padding(horizontal = gutter),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
                 SectionTitle(stringResource(R.string.solicitud_parte))
                 ChoiceGroup(
                     options = PlantOrgan.entries,

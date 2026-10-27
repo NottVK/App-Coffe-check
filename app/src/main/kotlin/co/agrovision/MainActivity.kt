@@ -68,7 +68,7 @@ class MainActivity : ComponentActivity() {
             }
 
             AgroTheme(appearance = appearance) {
-                AgroVisionNavHost()
+                SplashIntro { AgroVisionNavHost() }
             }
         }
     }

@@ -9,7 +9,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,12 +34,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material.icons.filled.WbCloudy
-import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -116,7 +112,7 @@ fun HomeScreen(
             .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState())
             .padding(bottom = AgroTheme.dimensions.gutterWide),
-        verticalArrangement = Arrangement.spacedBy(AgroTheme.dimensions.gutterWide),
+        verticalArrangement = Arrangement.spacedBy(AgroTheme.dimensions.gutter),
     ) {
         TopRow(modifier = Modifier.padding(start = gutter, end = gutter, top = gutter))
 
@@ -146,7 +142,6 @@ fun HomeScreen(
             FeaturedPests(pests = featured, onPestClick = onPestClick, onSeeAll = onCatalog)
         }
 
-        PhotoTips()
     }
 }
 
@@ -160,8 +155,7 @@ private fun greetingRes(): Int {
     }
 }
 
-/** Marca a la izquierda y, a la derecha, la promesa que más tranquiliza en el
- *  lote: que todo funciona sin señal. */
+/** Marca a la izquierda. */
 @Composable
 private fun TopRow(modifier: Modifier = Modifier) {
     Row(
@@ -187,26 +181,6 @@ private fun TopRow(modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.titleLarge,
             )
         }
-
-        Row(
-            modifier = Modifier
-                .clip(CircleShape)
-                .background(AgroTheme.semantic.card)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Filled.CloudOff,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(16.dp),
-            )
-            Text(
-                text = stringResource(R.string.home_sin_senal),
-                style = MaterialTheme.typography.labelLarge,
-            )
-        }
     }
 }
 
@@ -222,24 +196,12 @@ private fun Bento(
     onCatalog: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(BENTO_HEIGHT),
-        horizontalArrangement = Arrangement.spacedBy(TILE_GAP),
-    ) {
+    Box(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         AnalyzeTile(
             onClick = onAnalyze,
             modifier = Modifier
-                .weight(1.3f)
-                .fillMaxHeight(),
-        )
-        CatalogTile(
-            count = catalogCount,
-            onClick = onCatalog,
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight(),
+                .fillMaxWidth(BENTO_WIDTH_FRACTION)
+                .height(BENTO_HEIGHT),
         )
     }
 }
@@ -297,8 +259,9 @@ private fun AnalyzeTile(onClick: () -> Unit, modifier: Modifier = Modifier) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(20.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Box(
@@ -323,16 +286,21 @@ private fun AnalyzeTile(onClick: () -> Unit, modifier: Modifier = Modifier) {
                 }
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
                 Text(
                     text = stringResource(R.string.home_analizar),
-                    style = MaterialTheme.typography.headlineLarge,
+                    style = MaterialTheme.typography.headlineMedium,
                     color = semantic.onAccent,
+                    textAlign = TextAlign.Center,
                 )
                 Text(
                     text = stringResource(R.string.home_analizar_ayuda),
                     style = MaterialTheme.typography.bodyMedium,
                     color = semantic.onAccent.copy(alpha = 0.75f),
+                    textAlign = TextAlign.Center,
                 )
             }
         }
@@ -488,75 +456,6 @@ private fun PestCard(pest: PestTaxon, onClick: () -> Unit) {
 }
 
 /**
- * Consejos de encuadre. Son las mismas instrucciones que da la compuerta de
- * calidad cuando rechaza una foto, dichas ANTES de tomarla: es más barato
- * enseñar a encuadrar que rechazar la foto después.
- *
- * No van numerados: no son pasos, se cumplen los tres a la vez.
- */
-@Composable
-private fun PhotoTips() {
-    val semantic = AgroTheme.semantic
-    val gutter = AgroTheme.dimensions.gutter
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(
-            text = stringResource(R.string.home_consejos),
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(horizontal = gutter),
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = gutter),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Tip(
-                icon = Icons.Filled.ZoomIn,
-                text = stringResource(R.string.home_consejo_cerca),
-                background = semantic.softLime,
-                tint = semantic.onSoftLime,
-            )
-            Tip(
-                icon = Icons.Filled.WbCloudy,
-                text = stringResource(R.string.home_consejo_luz),
-                background = semantic.softSky,
-                tint = semantic.onSoftSky,
-            )
-            Tip(
-                icon = Icons.Filled.CenterFocusStrong,
-                text = stringResource(R.string.home_consejo_foco),
-                background = MaterialTheme.colorScheme.secondaryContainer,
-                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-            )
-        }
-    }
-}
-
-@Composable
-private fun Tip(icon: ImageVector, text: String, background: Color, tint: Color) {
-    Row(
-        modifier = Modifier
-            .clip(CircleShape)
-            .background(background)
-            .padding(start = 6.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.6f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
-        }
-        Text(text = text, style = MaterialTheme.typography.labelLarge, color = tint)
-    }
-}
-
-/**
  * Hoja de café dibujada con `Path`, no un PNG.
  *
  * Escala a cualquier densidad sin pesar nada y sin necesitar cinco variantes en
@@ -588,7 +487,8 @@ private fun LeafMark(leaf: Color, vein: Color, modifier: Modifier = Modifier) {
     }
 }
 
-private val BENTO_HEIGHT = 250.dp
+private val BENTO_HEIGHT = 180.dp
+private const val BENTO_WIDTH_FRACTION = 0.8f
 private val TILE_GAP = 12.dp
 private val COUNT_SIZE = 64.sp
 private val CAMERA_DOT = 56.dp
