@@ -252,6 +252,28 @@ interface LocationProvider {
     /** Devuelve null si no hay permiso, no hay consentimiento o no hay fix
      *  reciente. Nunca bloquea la captura: la ubicación es opcional. */
     suspend fun currentLocation(): GeoPoint?
+
+    /**
+     * Fix nuevo de GPS con la máxima precisión, para una Solicitud de Revisión.
+     * Espera hasta [timeout]; a diferencia de [currentLocation] sí puede tardar,
+     * porque ahí el productor está esperando la respuesta y puede reintentar.
+     */
+    suspend fun acquireExactFix(
+        timeout: kotlin.time.Duration = co.agrovision.core.common.AgroConstants.Location.FIX_TIMEOUT,
+    ): FixResult
+}
+
+sealed interface FixResult {
+    data class Fix(val point: GeoPoint) : FixResult
+
+    /** Sin permiso de ubicación precisa. */
+    data object PermissionDenied : FixResult
+
+    /** El GPS está apagado en el teléfono. */
+    data object GpsDisabled : FixResult
+
+    /** No llegó ningún fix a tiempo (cielo cubierto, cañada). */
+    data object TimedOut : FixResult
 }
 
 interface ConnectivityMonitor {

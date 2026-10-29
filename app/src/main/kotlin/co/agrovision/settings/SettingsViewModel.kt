@@ -66,6 +66,10 @@ class SettingsViewModel @Inject constructor(
     fun setLocationPrecision(precision: LocationPrecision) =
         update { it.copy(locationPrecision = precision) }
 
+    /** Retira el permiso de compartir la ubicación exacta en solicitudes; la
+     *  próxima solicitud vuelve a preguntar. */
+    fun revokeLocationShare() = update { it.copy(locationShareConsentAtEpochMillis = null) }
+
     fun setOutdoorMode(mode: OutdoorMode) = update { it.copy(outdoorMode = mode) }
 
     fun setVoiceReadout(enabled: Boolean) = update { it.copy(voiceReadout = enabled) }

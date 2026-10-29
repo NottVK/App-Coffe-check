@@ -236,7 +236,8 @@ private fun RequestCard(
                     )
                 }
             }
-        } else if (expanded && request.sync.state == SyncState.FAILED && request.sync.lastError != null) {
+        } else if (expanded && (request.sync.state == SyncState.FAILED || request.sync.state == SyncState.PENDING) &&
+            request.sync.lastError != null) {
             Text(
                 text = request.sync.lastError.orEmpty(),
                 style = MaterialTheme.typography.bodyMedium,

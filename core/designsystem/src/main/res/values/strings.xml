@@ -45,6 +45,12 @@
     <string name="solicitud_faltan_fotos">Necesito al menos %1$s fotos desde ángulos distintos.</string>
     <string name="solicitud_creada">Solicitud guardada. Se envía apenas haya señal.</string>
     <string name="solicitud_resuelta">Un agrónomo respondió tu solicitud.</string>
+    <string name="ubicacion_permiso_denegado">Para pedir la revisión necesitamos tu ubicación exacta. Activa el permiso de ubicación en los ajustes del teléfono.</string>
+    <string name="ubicacion_gps_apagado">El GPS está apagado. Actívalo para tomar la ubicación exacta de tu cafetal.</string>
+    <string name="ubicacion_sin_senal">No pudimos ubicarte a tiempo. Sal a un lugar despejado e inténtalo de nuevo.</string>
+    <string name="ubicacion_sin_consentimiento">Sin la ubicación no se puede pedir la revisión. Tus fotos quedan guardadas; cuando quieras, vuelve a intentarlo.</string>
+    <string name="ubicacion_requiere_confirmar">Esta foto no tiene una ubicación exacta. Toma la foto de nuevo o confirma que sigues en el lote.</string>
+    <string name="ubicacion_exacta_requerida">El servidor necesita la ubicación exacta para esta solicitud. Quedó en espera; toma la foto de nuevo en el lote.</string>
 
     <!-- ── Cuenta ─────────────────────────────────────────────────────────── -->
     <string name="cuenta_sin_sesion">Primero ingresa con tu número de celular.</string>

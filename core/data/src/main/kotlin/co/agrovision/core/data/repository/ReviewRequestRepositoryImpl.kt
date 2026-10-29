@@ -139,7 +139,16 @@ internal fun ReviewRequestWithImages.toDomain(): ReviewRequest = ReviewRequest(
     noteText = request.noteText,
     noteAudioPath = request.noteAudioPath,
     location = request.latitude?.let { lat ->
-        request.longitude?.let { lon -> GeoPoint(lat, lon, request.locationAccuracyM) }
+        request.longitude?.let { lon ->
+            GeoPoint(
+                latitude = lat,
+                longitude = lon,
+                accuracyMeters = request.locationAccuracyM,
+                altitudeMeters = request.altitudeM,
+                isMock = request.locationIsMock,
+                isExact = request.locationIsExact,
+            )
+        }
     },
     createdAtEpochMillis = request.createdAt,
     status = ReviewStatus.entries.firstOrNull { it.name == request.status }
@@ -188,6 +197,9 @@ internal fun ReviewRequest.toEntity(): ReviewRequestEntity = ReviewRequestEntity
     lastSyncError = sync.lastError,
     nextAttemptAt = sync.nextAttemptAtEpochMillis,
     serverId = sync.serverId,
+    altitudeM = location?.altitudeMeters,
+    locationIsMock = location?.isMock ?: false,
+    locationIsExact = location?.isExact ?: false,
 )
 
 internal fun ReviewImage.toEntity(requestId: String): ReviewImageEntity = ReviewImageEntity(

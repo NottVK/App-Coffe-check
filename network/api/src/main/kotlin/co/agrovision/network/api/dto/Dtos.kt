@@ -61,7 +61,19 @@ data class LocationDto(
     val latitude: Double,
     val longitude: Double,
     val accuracyMeters: Float? = null,
-)
+    /** `exact` | `coarse`. Sin valor por defecto a propósito: el `Json` del módulo
+     *  no codifica defaults y el servidor no debe tener que deducirlo. */
+    val precision: String,
+    /** Solo con precisión `exact` y si el fix trae altitud. */
+    val altitudeMeters: Double? = null,
+    /** El sistema marcó el fix como simulado. */
+    val mock: Boolean,
+) {
+    companion object {
+        const val PRECISION_EXACT = "exact"
+        const val PRECISION_COARSE = "coarse"
+    }
+}
 
 @Serializable
 data class ReviewRequestBatchDto(val requests: List<ReviewRequestDto>)

@@ -3,8 +3,12 @@ package co.agrovision.core.data.repository
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Build
+import android.os.Bundle
+import android.os.Looper
 import android.util.Log
 import androidx.core.content.ContextCompat
 import co.agrovision.core.common.AgroConstants
@@ -26,6 +30,7 @@ import co.agrovision.core.model.port.AccountRepository
 import co.agrovision.core.model.port.AppVersionProvider
 import co.agrovision.core.model.port.Clock
 import co.agrovision.core.model.port.ProfileRegistration
+import co.agrovision.core.model.port.FixResult
 import co.agrovision.core.model.port.LocationProvider
 import co.agrovision.core.model.port.SyncGateway
 import co.agrovision.core.model.port.TelemetryRecorder
@@ -37,9 +42,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.resume
+import kotlin.time.Duration
 
 /**
  * Cuenta del productor.
@@ -233,8 +243,89 @@ class LocationProviderImpl @Inject constructor(
             }
             .filter { now - it.time <= freshnessWindow }
             .maxByOrNull { it.time }
-            ?.let { GeoPoint(it.latitude, it.longitude, it.accuracy) }
+            ?.toGeoPoint()
     }
+
+    /**
+     * Pide GPS con la máxima precisión y espera hasta [timeout]. Termina en cuanto
+     * llega un fix dentro de la precisión objetivo; si vence la espera, usa el
+     * mejor fix recibido solo si es aceptable. No usa `getLastKnownLocation`: una
+     * solicitud necesita dónde está el productor AHORA.
+     */
+    override suspend fun acquireExactFix(timeout: Duration): FixResult {
+        if (!hasFinePermission()) return FixResult.PermissionDenied
+        val manager = context.getSystemService(LocationManager::class.java)
+        if (manager == null || !runCatching { manager.isProviderEnabled(LocationManager.GPS_PROVIDER) }
+                .getOrDefault(false)
+        ) {
+            return FixResult.GpsDisabled
+        }
+
+        val best = AtomicReference<Location?>(null)
+        val listener = object : LocationListener {
+            var onGoodFix: ((Location) -> Unit)? = null
+
+            override fun onLocationChanged(location: Location) {
+                val current = best.get()
+                if (current == null || location.accuracyOrWorst() < current.accuracyOrWorst()) {
+                    best.set(location)
+                }
+                if (location.accuracyOrWorst() <= AgroConstants.Location.TARGET_ACCURACY_METERS) {
+                    onGoodFix?.invoke(location)
+                }
+            }
+
+            // Obligatorios por debajo de API 30; sin ellos, AbstractMethodError.
+            @Deprecated("Sin uso desde API 29")
+            override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) = Unit
+            override fun onProviderEnabled(provider: String) = Unit
+            override fun onProviderDisabled(provider: String) = Unit
+        }
+
+        try {
+            withTimeoutOrNull(timeout) {
+                suspendCancellableCoroutine<Unit> { continuation ->
+                    listener.onGoodFix = { if (continuation.isActive) continuation.resume(Unit) }
+                    try {
+                        manager.requestLocationUpdates(
+                            LocationManager.GPS_PROVIDER, 0L, 0f, listener, Looper.getMainLooper(),
+                        )
+                    } catch (error: SecurityException) {
+                        // El permiso se retiró entre la comprobación y la petición.
+                        continuation.resume(Unit)
+                    }
+                }
+            }
+        } finally {
+            runCatching { manager.removeUpdates(listener) }
+        }
+
+        val fix = best.get()
+            ?.takeIf { it.accuracyOrWorst() <= AgroConstants.Location.MAX_ACCEPTABLE_ACCURACY_METERS }
+            ?: return if (hasFinePermission()) FixResult.TimedOut else FixResult.PermissionDenied
+        return FixResult.Fix(fix.toGeoPoint())
+    }
+
+    private fun Location.accuracyOrWorst(): Float = if (hasAccuracy()) accuracy else Float.MAX_VALUE
+
+    /** Altitud solo si el fix la trae; `isMock` desde API 31, antes `isFromMockProvider`. */
+    private fun Location.toGeoPoint() = GeoPoint(
+        latitude = latitude,
+        longitude = longitude,
+        accuracyMeters = if (hasAccuracy()) accuracy else null,
+        altitudeMeters = if (hasAltitude()) altitude else null,
+        isMock = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            isMock
+        } else {
+            @Suppress("DEPRECATION")
+            isFromMockProvider
+        },
+        isExact = true,
+    )
+
+    private fun hasFinePermission(): Boolean =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
 
     private fun hasPermission(): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) ==

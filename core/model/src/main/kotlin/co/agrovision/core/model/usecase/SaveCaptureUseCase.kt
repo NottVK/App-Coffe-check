@@ -78,11 +78,14 @@ class SaveCaptureUseCase @Inject constructor(
      * La ubicación nunca bloquea la captura. Sin permiso, sin consentimiento o
      * sin fix reciente, la captura se guarda igual: un escaneo sin coordenada
      * sigue siendo útil; un escaneo perdido por esperar al GPS, no.
+     *
+     * Se guarda la coordenada EXACTA aunque el productor haya elegido vereda: esa
+     * preferencia se aplica al enviar (`SyncPendingUseCase`), no al guardar. Así
+     * una solicitud de revisión posterior conserva la coordenada de la foto.
      */
     private suspend fun resolveLocation(
         preferences: co.agrovision.core.model.settings.UserPreferences,
-    ) = if (!preferences.locationEnabled) null
-    else location.currentLocation()?.withPrecision(preferences.locationPrecision)
+    ) = if (!preferences.locationEnabled) null else location.currentLocation()
 
     data class Request(
         val image: co.agrovision.core.model.scan.RgbImage,

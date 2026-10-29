@@ -100,7 +100,12 @@ class SyncPendingUseCase @Inject constructor(
         val captureBatch = captures.nextBatchToUpload(AgroConstants.Sync.BATCH_SIZE, now)
         if (captureBatch.isNotEmpty()) {
             captureBatch.forEach { captures.updateSyncState(it.id, SyncState.UPLOADING) }
-            when (val result = gateway.uploadCaptures(captureBatch)) {
+            // La preferencia de precisión se aplica AQUÍ, a lo que sale del teléfono:
+            // en Room la coordenada queda exacta (la necesita una solicitud posterior).
+            val outgoingCaptures = captureBatch.map { capture ->
+                capture.copy(location = capture.location?.withPrecision(preferences.locationPrecision))
+            }
+            when (val result = gateway.uploadCaptures(outgoingCaptures)) {
                 is AgroResult.Failure -> {
                     if (result.error == DomainError.NotSignedIn) {
                         // De vuelta a la cola tal como estaban antes de marcarlas
@@ -131,7 +136,13 @@ class SyncPendingUseCase @Inject constructor(
         }
 
         // ── 3. Solicitudes de revisión ──
-        val reviewBatch = reviews.nextBatchToUpload(AgroConstants.Sync.BATCH_SIZE, now)
+        // Una solicitud sin coordenada exacta (filas anteriores a esta regla, o sin
+        // GPS) no se envía: el servidor la rechazaría y una aproximada no puede
+        // hacerse pasar por exacta. Queda en cola, sin perderse.
+        val (reviewBatch, withoutExactLocation) = reviews
+            .nextBatchToUpload(AgroConstants.Sync.BATCH_SIZE, now)
+            .partition { it.location?.isExact == true }
+        withoutExactLocation.forEach { holdForExactLocation(it, now) }
         if (reviewBatch.isNotEmpty()) {
             // Variedad y edad del cafetal viajan en la nota (ver `withFarmContext`).
             val outgoing = reviewBatch.map { review ->
@@ -144,7 +155,11 @@ class SyncPendingUseCase @Inject constructor(
                     if (result.error == DomainError.NotSignedIn) {
                         return signInRequired(trigger, uploaded, failed)
                     }
-                    reviewBatch.forEach { review ->
+                    // 422 ubicacion_exacta_requerida: no es un fallo transitorio. Se
+                    // deja en cola sin gastar reintentos hasta que haya ubicación.
+                    if (result.error == DomainError.ExactLocationRequired) {
+                        reviewBatch.forEach { holdForExactLocation(it, now) }
+                    } else reviewBatch.forEach { review ->
                         failed++
                         retryReview(review, describe(result.error), now)
                     }
@@ -270,6 +285,12 @@ class SyncPendingUseCase @Inject constructor(
                     retryReview(review, "El servidor no devolvió resultado para esta solicitud.", now)
                 }
 
+                outcome.status == UploadStatus.REJECTED &&
+                    outcome.rejectionReason == EXACT_LOCATION_REQUIRED_CODE -> {
+                    failed++
+                    holdForExactLocation(review, now)
+                }
+
                 // Rechazo definitivo: reintentar no cambiaría nada.
                 outcome.status == UploadStatus.REJECTED -> {
                     failed++
@@ -347,6 +368,16 @@ class SyncPendingUseCase @Inject constructor(
         data object SessionExpired : ImageUpload
     }
 
+    /** Deja la solicitud en cola con la razón visible. No es un fallo de red: el
+     *  siguiente intento solo tiene sentido pasado un buen rato (o tras recapturar). */
+    private suspend fun holdForExactLocation(review: ReviewRequest, now: Long) =
+        reviews.updateSyncState(
+            id = review.id,
+            state = SyncState.PENDING,
+            error = EXACT_LOCATION_HOLD_MESSAGE,
+            nextAttemptAtEpochMillis = now + AgroConstants.Sync.MAX_BACKOFF.inWholeMilliseconds,
+        )
+
     private suspend fun retryReview(
         review: ReviewRequest,
         error: String,
@@ -407,6 +438,9 @@ class SyncPendingUseCase @Inject constructor(
 
     private companion object {
         const val MAX_BACKOFF_EXPONENT = 10
+        const val EXACT_LOCATION_REQUIRED_CODE = "ubicacion_exacta_requerida"
+        const val EXACT_LOCATION_HOLD_MESSAGE =
+            "Falta la ubicación exacta de la foto. Toma la foto de nuevo en el lote para enviarla."
         val running = Mutex()
     }
 }

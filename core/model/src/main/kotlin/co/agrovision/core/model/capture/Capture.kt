@@ -84,11 +84,25 @@ enum class SyncState {
  * productor puede además elegir precisión reducida: en un conflicto de tierras
  * o frente a un comprador, la coordenada exacta de un lote es información
  * sensible, y no es asunto nuestro decidir por él (§12.2).
+ *
+ * **La coordenada se guarda siempre exacta en el dispositivo** y la precisión
+ * elegida se aplica solo al construir lo que SALE del teléfono
+ * ([withPrecision]). Si se redondeara al guardar, una solicitud de revisión
+ * posterior ya no tendría la coordenada exacta de la foto.
+ *
+ * [isExact] es falso en dos casos: tras redondear a vereda y en las filas
+ * anteriores a esta distinción, de las que no se sabe si se guardaron
+ * redondeadas. Una coordenada no exacta jamás se envía como si lo fuera.
  */
 data class GeoPoint(
     val latitude: Double,
     val longitude: Double,
     val accuracyMeters: Float?,
+    /** Solo si el fix la trae (`Location.hasAltitude()`). */
+    val altitudeMeters: Double? = null,
+    /** El sistema marcó el fix como simulado (`isMock` / `isFromMockProvider`). */
+    val isMock: Boolean = false,
+    val isExact: Boolean = true,
 ) {
     fun withPrecision(precision: LocationPrecision): GeoPoint = when (precision) {
         LocationPrecision.EXACT -> this
@@ -98,6 +112,9 @@ data class GeoPoint(
                 latitude = round(latitude / grid) * grid,
                 longitude = round(longitude / grid) * grid,
                 accuracyMeters = null,
+                altitudeMeters = null,
+                isMock = isMock,
+                isExact = false,
             )
         }
     }

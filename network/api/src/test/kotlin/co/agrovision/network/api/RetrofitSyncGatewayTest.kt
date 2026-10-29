@@ -1,11 +1,16 @@
 package co.agrovision.network.api
 
 import co.agrovision.core.common.AgroResult
+import co.agrovision.core.model.DomainError
+import co.agrovision.core.model.capture.Capture
+import co.agrovision.core.model.capture.GeoPoint
+import co.agrovision.core.model.capture.LocationPrecision
 import co.agrovision.core.model.capture.SyncStatus
 import co.agrovision.core.model.pest.CropType
 import co.agrovision.core.model.pest.PlantOrgan
 import co.agrovision.core.model.port.UploadStatus
 import co.agrovision.core.model.review.CaptureAngle
+import co.agrovision.core.model.scan.GateOutcome
 import co.agrovision.core.model.review.ResolutionType
 import co.agrovision.core.model.review.ReviewImage
 import co.agrovision.core.model.review.ReviewRequest
@@ -14,6 +19,11 @@ import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFact
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.double
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
@@ -125,6 +135,98 @@ class RetrofitSyncGatewayTest {
         assertNull(request.getHeader("Authorization"))
         photo.delete()
     }
+
+    @Test
+    fun `la solicitud envia precision exact con altitud y mock`() = runBlocking<Unit> {
+        api.enqueue(MockResponse().setBody("""{"results":[]}"""))
+
+        gateway.uploadReviewRequests(
+            listOf(review().copy(location = GeoPoint(2.92734, -75.28197, 6f, altitudeMeters = 1432.5, isMock = true)))
+        )
+
+        val location = bodyLocation(api.takeRequest().body.readUtf8())
+        assertEquals("exact", location["precision"]?.jsonPrimitive?.content)
+        assertEquals(1432.5, location["altitudeMeters"]?.jsonPrimitive?.double)
+        assertEquals(true, location["mock"]?.jsonPrimitive?.boolean)
+        assertEquals(2.92734, location["latitude"]?.jsonPrimitive?.double)
+    }
+
+    @Test
+    fun `una coordenada redondeada sale coarse y sin altitud`() = runBlocking<Unit> {
+        api.enqueue(MockResponse().setBody("""{"results":[]}"""))
+        val coarse = GeoPoint(2.92734, -75.28197, 6f, altitudeMeters = 1432.5)
+            .withPrecision(LocationPrecision.VEREDA)
+
+        gateway.uploadReviewRequests(listOf(review().copy(location = coarse)))
+
+        val location = bodyLocation(api.takeRequest().body.readUtf8())
+        assertEquals("coarse", location["precision"]?.jsonPrimitive?.content)
+        assertNull(location["altitudeMeters"])
+        assertEquals(false, location["mock"]?.jsonPrimitive?.boolean)
+    }
+
+    @Test
+    fun `una captura con precision EXACTA lleva exact y una antigua de origen incierto, coarse`() =
+        runBlocking<Unit> {
+            api.enqueue(MockResponse().setBody("""{"results":[]}"""))
+            api.enqueue(MockResponse().setBody("""{"results":[]}"""))
+
+            gateway.uploadCaptures(listOf(capture(GeoPoint(2.9, -75.2, 5f, altitudeMeters = 900.0))))
+            gateway.uploadCaptures(listOf(capture(GeoPoint(2.93, -75.28, null, isExact = false))))
+
+            val exact = captureLocation(api.takeRequest().body.readUtf8())
+            val legacy = captureLocation(api.takeRequest().body.readUtf8())
+            assertEquals("exact", exact["precision"]?.jsonPrimitive?.content)
+            assertEquals(900.0, exact["altitudeMeters"]?.jsonPrimitive?.double)
+            assertEquals("coarse", legacy["precision"]?.jsonPrimitive?.content)
+        }
+
+    @Test
+    fun `un 422 ubicacion_exacta_requerida se traduce a un error propio`() = runBlocking<Unit> {
+        api.enqueue(
+            MockResponse().setResponseCode(422)
+                .setBody("""{"statusCode":422,"message":"ubicacion_exacta_requerida"}""")
+        )
+
+        val result = gateway.uploadReviewRequests(listOf(review()))
+
+        assertEquals(DomainError.ExactLocationRequired, (result as AgroResult.Failure).error)
+    }
+
+    @Test
+    fun `otro 422 sigue siendo un fallo remoto comun`() = runBlocking<Unit> {
+        api.enqueue(MockResponse().setResponseCode(422).setBody("""{"message":"otra cosa"}"""))
+
+        val result = gateway.uploadReviewRequests(listOf(review()))
+
+        assertEquals(422, ((result as AgroResult.Failure).error as DomainError.RemoteFailure).httpCode)
+    }
+
+    private fun bodyLocation(body: String) = Json.parseToJsonElement(body).jsonObject["requests"]!!
+        .jsonArray.single().jsonObject["location"]!!.jsonObject
+
+    private fun captureLocation(body: String) = Json.parseToJsonElement(body).jsonObject["captures"]!!
+        .jsonArray.single().jsonObject["location"]!!.jsonObject
+
+    private fun capture(location: GeoPoint) = Capture(
+        id = "cap-1",
+        imagePath = "/fotos/c.jpg",
+        thumbnailPath = "/fotos/c.thumb.jpg",
+        capturedAtEpochMillis = 50L,
+        location = location,
+        cropType = CropType.CAFE,
+        plantOrgan = PlantOrgan.HOJA,
+        modelVersion = "2.0.0",
+        predictedClassId = null,
+        calibratedConfidence = null,
+        top = emptyList(),
+        embedding = null,
+        oodScore = 0f,
+        gateOutcome = GateOutcome.UNCERTAIN,
+        userCorrectionClassId = null,
+        userConfirmed = false,
+        sync = SyncStatus.PENDING,
+    )
 
     private fun review() = ReviewRequest(
         id = "req-1",

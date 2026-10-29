@@ -13,7 +13,12 @@ import co.agrovision.core.model.port.Clock
 import co.agrovision.core.model.port.IdGenerator
 import co.agrovision.core.model.port.ImageQualityInspector
 import co.agrovision.core.model.port.ImageStore
+import co.agrovision.core.model.port.FixResult
 import co.agrovision.core.model.port.LocationProvider
+import co.agrovision.core.model.port.ReviewRequestRepository
+import co.agrovision.core.model.review.RemoteReviewStatus
+import co.agrovision.core.model.review.ReviewRequest
+import co.agrovision.core.model.review.ReviewStatus
 import co.agrovision.core.model.port.PestCatalogRepository
 import co.agrovision.core.model.port.PestClassifier
 import co.agrovision.core.model.port.SettingsRepository
@@ -154,8 +159,52 @@ class FakeSettings(
     }
 }
 
-class FakeLocationProvider(private val point: GeoPoint? = null) : LocationProvider {
+/**
+ * [point] es lo que ve una captura (último fix); [fix] es lo que devuelve el GPS
+ * al pedir una revisión. Por defecto, el mismo punto; sin punto, GPS apagado.
+ */
+class FakeLocationProvider(
+    private val point: GeoPoint? = null,
+    var fix: FixResult = point?.let { FixResult.Fix(it) } ?: FixResult.GpsDisabled,
+) : LocationProvider {
+    var fixRequests = 0
+
     override suspend fun currentLocation(): GeoPoint? = point
+
+    override suspend fun acquireExactFix(timeout: kotlin.time.Duration): FixResult {
+        fixRequests++
+        return fix
+    }
+}
+
+/** Solicitudes en memoria: lo guardado es justo lo que luego se enviaría. */
+class FakeReviewRepository : ReviewRequestRepository {
+    val saved = mutableListOf<ReviewRequest>()
+
+    override fun observeMine(): Flow<List<ReviewRequest>> = MutableStateFlow(saved.toList())
+    override fun observeById(id: String): Flow<ReviewRequest?> =
+        MutableStateFlow(saved.firstOrNull { it.id == id })
+    override fun observeUnreadResolutions(): Flow<List<ReviewRequest>> = MutableStateFlow(emptyList())
+
+    override suspend fun save(request: ReviewRequest): AgroResult<Unit, DomainError> {
+        saved += request
+        return AgroResult.unit
+    }
+
+    override suspend fun nextBatchToUpload(limit: Int, nowEpochMillis: Long) = saved.toList()
+    override suspend fun updateSyncState(
+        id: String,
+        state: SyncState,
+        serverId: String?,
+        error: String?,
+        nextAttemptAtEpochMillis: Long?,
+        status: ReviewStatus?,
+    ) = Unit
+
+    override suspend fun mergeRemoteStatuses(statuses: List<RemoteReviewStatus>) = 0
+    override suspend fun statusCursor(): Long? = null
+    override suspend fun updateStatusCursor(sinceEpochMillis: Long) = Unit
+    override suspend fun markResolutionRead(id: String) = Unit
 }
 
 class FakeTelemetry : TelemetryRecorder {

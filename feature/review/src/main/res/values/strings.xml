@@ -51,6 +51,25 @@
     <string name="solicitud_cafetal">Tu cafetal</string>
     <string name="solicitud_cafetal_valor">%1$s · sembrado hace %2$s</string>
     <string name="solicitud_enviar">Enviar al agrónomo</string>
+
+    <!-- ── Ubicación exacta de la solicitud ───────────────────────────────── -->
+    <string name="ubic_buscando">Buscando tu ubicación exacta… puede tardar hasta 15 segundos.</string>
+    <string name="ubic_aceptar">Aceptar</string>
+    <string name="ubic_cancelar">Cancelar</string>
+    <string name="ubic_reintentar">Reintentar</string>
+    <string name="ubic_consent_titulo">Compartir tu ubicación exacta</string>
+    <string name="ubic_consent_cuerpo">Para que un especialista revise tu caso, compartiremos la ubicación exacta donde tomaste la foto con el administrador y el agrónomo asignado. Solo la usan para atender esta solicitud. Puedes retirar este permiso cuando quieras en Ajustes.</string>
+    <string name="ubic_lote_titulo">Esta foto no tiene ubicación exacta</string>
+    <string name="ubic_lote_cuerpo">Si sigues en el lote, confirma y tomaremos tu ubicación ahora. Si ya te fuiste, vuelve al lote y toma la foto de nuevo.</string>
+    <string name="ubic_lote_confirmar">Sigo en el lote</string>
+    <string name="ubic_permiso_titulo">Falta el permiso de ubicación</string>
+    <string name="ubic_permiso_cuerpo">El agrónomo necesita saber en qué lote está la planta. Activa el permiso de ubicación precisa para AgroVisión en los ajustes del teléfono.</string>
+    <string name="ubic_abrir_ajustes">Abrir ajustes</string>
+    <string name="ubic_gps_titulo">Activa el GPS</string>
+    <string name="ubic_gps_cuerpo">El GPS está apagado. Actívalo para tomar la ubicación exacta de tu cafetal y vuelve a enviar.</string>
+    <string name="ubic_gps_activar">Activar GPS</string>
+    <string name="ubic_timeout_titulo">No pudimos ubicarte</string>
+    <string name="ubic_timeout_cuerpo">No llegó la señal de GPS a tiempo. Sal a un lugar despejado, lejos de árboles altos, e inténtalo de nuevo.</string>
     <string name="solicitud_guardando">Guardando…</string>
 
     <string name="cultivo_cafe">Café</string>

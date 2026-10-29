@@ -10,6 +10,14 @@ data class UserPreferences(
     val voiceReadout: Boolean,
     val trainingConsent: Boolean,
     val notificationsEnabled: Boolean,
+    /**
+     * Cuándo aceptó el productor compartir la ubicación EXACTA de su foto con el
+     * administrador y el agrónomo asignado al pedir una revisión. `null` = no lo
+     * ha aceptado (o lo retiró). Es un consentimiento distinto de
+     * [trainingConsent] (uso de imágenes para entrenar) y de [locationEnabled]
+     * (ubicación de las capturas): se pide en contexto, al enviar una solicitud.
+     */
+    val locationShareConsentAtEpochMillis: Long? = null,
 ) {
     companion object {
         /**

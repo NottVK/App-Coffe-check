@@ -53,6 +53,37 @@ sealed interface DomainError {
         override val message = MessageKey.REVIEW_NEEDS_MORE_IMAGES
     }
 
+    // ── Ubicación de la solicitud ──
+
+    /** Falta el permiso de ubicación precisa del sistema. */
+    data object LocationPermissionDenied : DomainError {
+        override val message = MessageKey.LOCATION_PERMISSION_DENIED
+    }
+
+    data object GpsDisabled : DomainError {
+        override val message = MessageKey.LOCATION_GPS_OFF
+    }
+
+    data object LocationFixTimeout : DomainError {
+        override val message = MessageKey.LOCATION_FIX_TIMEOUT
+    }
+
+    /** El productor no aceptó (o canceló) compartir la ubicación exacta. */
+    data object LocationConsentRequired : DomainError {
+        override val message = MessageKey.LOCATION_CONSENT_REQUIRED
+    }
+
+    /** La foto de la captura no tiene una coordenada exacta fiable. Hay que
+     *  capturar de nuevo o confirmar que el productor sigue en el lote. */
+    data object LocationNeedsConfirmation : DomainError {
+        override val message = MessageKey.LOCATION_NEEDS_CONFIRMATION
+    }
+
+    /** HTTP 422 `ubicacion_exacta_requerida`: el servidor no aceptó la ubicación. */
+    data object ExactLocationRequired : DomainError {
+        override val message = MessageKey.LOCATION_EXACT_REQUIRED
+    }
+
     // ── Cuenta ──
 
     /** No hay sesión: la operación exige el JWT que entrega el OTP. */

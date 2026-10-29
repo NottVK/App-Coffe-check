@@ -95,6 +95,17 @@ object AgroConstants {
         const val COARSE_GRID_DEGREES = 0.01
 
         val FRESHNESS: Duration = 2.minutes
+
+        /** Espera máxima por un fix de GPS al pedir una revisión. Pasado esto se
+         *  informa al productor y se le deja reintentar. */
+        val FIX_TIMEOUT: Duration = 15.seconds
+
+        /** Con un fix de esta precisión o mejor no hace falta seguir esperando. */
+        const val TARGET_ACCURACY_METERS = 30f
+
+        /** Si al vencer la espera hay un fix peor que el objetivo pero mejor que
+         *  esto, se usa; un fix de cientos de metros no es una ubicación exacta. */
+        const val MAX_ACCEPTABLE_ACCURACY_METERS = 100f
     }
 
     object Ui {

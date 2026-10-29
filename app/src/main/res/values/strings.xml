@@ -42,6 +42,8 @@
     <string name="ajustes_ubicacion">Ubicación</string>
     <string name="ajustes_ubicacion_usar">Guardar dónde tomo la foto</string>
     <string name="ajustes_ubicacion_ayuda">Ayuda al agrónomo a conocer la zona. Puedes apagarlo cuando quieras.</string>
+    <string name="ajustes_ubicacion_solicitudes">Compartir mi ubicación exacta al pedir una revisión</string>
+    <string name="ajustes_ubicacion_solicitudes_ayuda">La ven el administrador y el agrónomo asignado, solo para atender tu solicitud. Si lo apagas, te lo volveremos a preguntar al enviar otra.</string>
     <string name="ajustes_ubicacion_exacta">Exacta</string>
     <string name="ajustes_ubicacion_vereda">Solo la vereda</string>
     <string name="ajustes_pantalla">Pantalla</string>

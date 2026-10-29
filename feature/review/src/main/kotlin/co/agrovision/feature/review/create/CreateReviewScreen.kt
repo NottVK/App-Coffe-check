@@ -85,6 +85,8 @@ fun CreateReviewScreen(
         is CreateStage.Confirming -> ConfirmShot(stage, state, onIntent, modifier)
         CreateStage.Form -> ReviewForm(state, onIntent, modifier)
     }
+
+    LocationPromptDialog(state.locationPrompt, onIntent)
 }
 
 // ── Toma guiada ─────────────────────────────────────────────────────────────
@@ -400,6 +402,12 @@ private fun ReviewForm(
                         text = it.resolve(),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                if (state.submitting && state.locationPrompt == null) {
+                    Text(
+                        text = stringResource(R.string.ubic_buscando),
+                        style = MaterialTheme.typography.bodyMedium,
                     )
                 }
                 PrimaryFieldButton(

@@ -3,6 +3,8 @@ package co.agrovision.core.model.usecase
 import co.agrovision.core.common.AgroResult
 import co.agrovision.core.model.DomainError
 import co.agrovision.core.model.capture.Capture
+import co.agrovision.core.model.capture.GeoPoint
+import co.agrovision.core.model.capture.LocationPrecision
 import co.agrovision.core.model.capture.SyncState
 import co.agrovision.core.model.capture.SyncStatus
 import co.agrovision.core.model.identity.Account
@@ -57,7 +59,8 @@ class SyncPendingUseCaseTest {
         plantOrgan = PlantOrgan.HOJA,
         noteText = null,
         noteAudioPath = null,
-        location = null,
+        // Una solicitud solo se envía con coordenada exacta.
+        location = GeoPoint(2.92734, -75.28197, 6f, altitudeMeters = 1_432.5, isMock = true),
         createdAtEpochMillis = 100L,
         status = ReviewStatus.PENDING_UPLOAD,
         resolution = null,
@@ -288,6 +291,108 @@ class SyncPendingUseCaseTest {
 
     // ── Utilidades ───────────────────────────────────────────────────────────
 
+    // ── Ubicación ────────────────────────────────────────────────────────────
+
+    @Test
+    fun `las capturas con VEREDA salen redondeadas y sin altitud`() = runTest {
+        val exact = GeoPoint(2.92734, -75.28197, 6f, altitudeMeters = 1_432.5, isMock = true)
+        coEvery { captures.nextBatchToUpload(any(), any()) } returns listOf(capture(exact))
+        coEvery { reviews.nextBatchToUpload(any(), any()) } returns emptyList()
+        coEvery { settings.current() } returns
+            UserPreferences.DEFAULT.copy(trainingConsent = true, locationPrecision = LocationPrecision.VEREDA)
+
+        runSync()
+
+        val sent = gateway.sentCaptures.single().location!!
+        assertEquals(2.93, sent.latitude, 1e-9)
+        assertEquals(-75.28, sent.longitude, 1e-9)
+        assertEquals(false, sent.isExact)
+        assertEquals(null, sent.altitudeMeters)
+        assertEquals(true, sent.isMock)
+    }
+
+    @Test
+    fun `las capturas con EXACTA salen exactas con altitud y fix simulado`() = runTest {
+        val exact = GeoPoint(2.92734, -75.28197, 6f, altitudeMeters = 1_432.5, isMock = true)
+        coEvery { captures.nextBatchToUpload(any(), any()) } returns listOf(capture(exact))
+        coEvery { reviews.nextBatchToUpload(any(), any()) } returns emptyList()
+        coEvery { settings.current() } returns
+            UserPreferences.DEFAULT.copy(trainingConsent = true, locationPrecision = LocationPrecision.EXACT)
+
+        runSync()
+
+        assertEquals(exact, gateway.sentCaptures.single().location)
+    }
+
+    @Test
+    fun `una captura antigua de origen incierto nunca sale como exacta aunque la preferencia sea EXACTA`() =
+        runTest {
+            val legacy = GeoPoint(2.93, -75.28, null, isExact = false)
+            coEvery { captures.nextBatchToUpload(any(), any()) } returns listOf(capture(legacy))
+            coEvery { reviews.nextBatchToUpload(any(), any()) } returns emptyList()
+            coEvery { settings.current() } returns
+                UserPreferences.DEFAULT.copy(trainingConsent = true, locationPrecision = LocationPrecision.EXACT)
+
+            runSync()
+
+            assertEquals(false, gateway.sentCaptures.single().location?.isExact)
+        }
+
+    @Test
+    fun `una solicitud sin coordenada exacta no se envia y queda en cola`() = runTest {
+        val approximate = review.copy(location = GeoPoint(2.93, -75.28, null, isExact = false))
+        coEvery { reviews.nextBatchToUpload(any(), any()) } returns listOf(approximate)
+
+        runSync()
+
+        assertEquals(0, gateway.reviewUploadCalls)
+        coVerify { reviews.updateSyncState("req-1", SyncState.PENDING, null, any(), any(), null) }
+        verifyNeverSubmitted()
+    }
+
+    @Test
+    fun `un 422 ubicacion_exacta_requerida deja la solicitud en cola sin darla por fallida`() = runTest {
+        gateway.reviewUploadError = DomainError.ExactLocationRequired
+
+        runSync()
+
+        coVerify { reviews.updateSyncState("req-1", SyncState.PENDING, null, any(), any(), null) }
+        coVerify(exactly = 0) { reviews.updateSyncState(any(), SyncState.FAILED, any(), any(), any(), any()) }
+        verifyNeverSubmitted()
+    }
+
+    @Test
+    fun `el rechazo por item ubicacion_exacta_requerida tambien la deja en cola`() = runTest {
+        respondWith(
+            outcome(UploadStatus.REJECTED).copy(rejectionReason = "ubicacion_exacta_requerida")
+        )
+
+        runSync()
+
+        coVerify { reviews.updateSyncState("req-1", SyncState.PENDING, null, any(), any(), null) }
+        coVerify(exactly = 0) { reviews.updateSyncState(any(), SyncState.FAILED, any(), any(), any(), any()) }
+    }
+
+    private fun capture(location: GeoPoint?) = Capture(
+        id = "cap-1",
+        imagePath = "/fotos/c.jpg",
+        thumbnailPath = "/fotos/c.thumb.jpg",
+        capturedAtEpochMillis = 50L,
+        location = location,
+        cropType = CropType.CAFE,
+        plantOrgan = PlantOrgan.HOJA,
+        modelVersion = "2.0.0",
+        predictedClassId = null,
+        calibratedConfidence = null,
+        top = emptyList(),
+        embedding = null,
+        oodScore = 0f,
+        gateOutcome = co.agrovision.core.model.scan.GateOutcome.UNCERTAIN,
+        userCorrectionClassId = null,
+        userConfirmed = false,
+        sync = SyncStatus.PENDING,
+    )
+
     private suspend fun runSync(): SyncSummary =
         (sync(SyncTrigger.MANUAL) as AgroResult.Success).value
 
@@ -322,6 +427,7 @@ class SyncPendingUseCaseTest {
         var reviewUploadError: DomainError? = null
         var reviewUploadCalls = 0
         var captureUploadError: DomainError? = null
+        val sentCaptures = mutableListOf<Capture>()
         var statuses: List<RemoteReviewStatus> = emptyList()
         var statusesError: DomainError? = null
         val failingUrls = mutableSetOf<String>()
@@ -338,8 +444,10 @@ class SyncPendingUseCaseTest {
 
         override suspend fun uploadCaptures(
             batch: List<Capture>,
-        ): AgroResult<List<UploadOutcome>, DomainError> =
-            captureUploadError?.let { AgroResult.failure(it) } ?: AgroResult.success(emptyList())
+        ): AgroResult<List<UploadOutcome>, DomainError> {
+            sentCaptures += batch
+            return captureUploadError?.let { AgroResult.failure(it) } ?: AgroResult.success(emptyList())
+        }
 
         override suspend fun uploadImage(
             presignedUrl: String,

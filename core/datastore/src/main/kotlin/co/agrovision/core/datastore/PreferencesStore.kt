@@ -3,6 +3,7 @@ package co.agrovision.core.datastore
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -51,6 +52,12 @@ class PreferencesStore @Inject constructor(
             preferences[Keys.VOICE_READOUT] = updated.voiceReadout
             preferences[Keys.TRAINING_CONSENT] = updated.trainingConsent
             preferences[Keys.NOTIFICATIONS] = updated.notificationsEnabled
+            val shareConsent = updated.locationShareConsentAtEpochMillis
+            if (shareConsent != null) {
+                preferences[Keys.LOCATION_SHARE_CONSENT_AT] = shareConsent
+            } else {
+                preferences.remove(Keys.LOCATION_SHARE_CONSENT_AT)
+            }
         }
     }
 
@@ -76,6 +83,7 @@ class PreferencesStore @Inject constructor(
             ?: UserPreferences.DEFAULT.trainingConsent,
         notificationsEnabled = preferences[Keys.NOTIFICATIONS]
             ?: UserPreferences.DEFAULT.notificationsEnabled,
+        locationShareConsentAtEpochMillis = preferences[Keys.LOCATION_SHARE_CONSENT_AT],
     )
 
     private object Keys {
@@ -86,6 +94,7 @@ class PreferencesStore @Inject constructor(
         val VOICE_READOUT = booleanPreferencesKey("voice_readout")
         val TRAINING_CONSENT = booleanPreferencesKey("training_consent")
         val NOTIFICATIONS = booleanPreferencesKey("notifications_enabled")
+        val LOCATION_SHARE_CONSENT_AT = longPreferencesKey("location_share_consent_at")
     }
 }
 

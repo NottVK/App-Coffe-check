@@ -58,6 +58,13 @@ val MessageKey.resourceId: Int
         MessageKey.REVIEW_CREATED -> R.string.solicitud_creada
         MessageKey.REVIEW_RESOLVED -> R.string.solicitud_resuelta
 
+        MessageKey.LOCATION_PERMISSION_DENIED -> R.string.ubicacion_permiso_denegado
+        MessageKey.LOCATION_GPS_OFF -> R.string.ubicacion_gps_apagado
+        MessageKey.LOCATION_FIX_TIMEOUT -> R.string.ubicacion_sin_senal
+        MessageKey.LOCATION_CONSENT_REQUIRED -> R.string.ubicacion_sin_consentimiento
+        MessageKey.LOCATION_NEEDS_CONFIRMATION -> R.string.ubicacion_requiere_confirmar
+        MessageKey.LOCATION_EXACT_REQUIRED -> R.string.ubicacion_exacta_requerida
+
         MessageKey.ACCOUNT_NOT_SIGNED_IN -> R.string.cuenta_sin_sesion
         MessageKey.ACCOUNT_OTP_TOO_SOON -> R.string.cuenta_otp_muy_pronto
         MessageKey.ACCOUNT_OTP_INVALID -> R.string.cuenta_otp_invalido

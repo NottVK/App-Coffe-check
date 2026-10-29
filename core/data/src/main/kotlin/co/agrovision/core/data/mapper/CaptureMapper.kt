@@ -39,7 +39,16 @@ fun CaptureEntity.toDomain(): Capture = Capture(
     thumbnailPath = thumbnailPath,
     capturedAtEpochMillis = capturedAt,
     location = latitude?.let { lat ->
-        longitude?.let { lon -> GeoPoint(lat, lon, locationAccuracyM) }
+        longitude?.let { lon ->
+            GeoPoint(
+                latitude = lat,
+                longitude = lon,
+                accuracyMeters = locationAccuracyM,
+                altitudeMeters = altitudeM,
+                isMock = locationIsMock,
+                isExact = locationIsExact,
+            )
+        }
     },
     cropType = cropType?.let { name -> CropType.entries.firstOrNull { it.name == name } },
     plantOrgan = plantOrgan?.let { name -> PlantOrgan.entries.firstOrNull { it.name == name } },
@@ -91,6 +100,9 @@ fun Capture.toEntity(sizeBytes: Long = 0L): CaptureEntity = CaptureEntity(
     nextAttemptAt = sync.nextAttemptAtEpochMillis,
     serverId = sync.serverId,
     sizeBytes = sizeBytes,
+    altitudeM = location?.altitudeMeters,
+    locationIsMock = location?.isMock ?: false,
+    locationIsExact = location?.isExact ?: false,
 )
 
 /**

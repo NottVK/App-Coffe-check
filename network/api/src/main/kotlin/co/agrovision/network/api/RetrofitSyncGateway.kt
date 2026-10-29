@@ -10,6 +10,7 @@ import co.agrovision.core.common.Float16Codec
 import co.agrovision.core.common.map
 import co.agrovision.core.model.DomainError
 import co.agrovision.core.model.capture.Capture
+import co.agrovision.core.model.capture.GeoPoint
 import co.agrovision.core.model.mlmodel.ModelChannel
 import co.agrovision.core.model.mlmodel.ModelManifest
 import co.agrovision.core.model.pest.PestTaxon
@@ -246,6 +247,9 @@ class RetrofitSyncGateway @Inject constructor(
             // JWT vencido o ausente. Se distingue de los demás fallos porque no
             // es culpa del lote: la cola espera sin gastar reintentos.
             response.code() == UNAUTHORIZED -> AgroResult.failure(DomainError.NotSignedIn)
+            response.code() == UNPROCESSABLE &&
+                response.errorBody()?.string()?.contains(EXACT_LOCATION_CODE) == true ->
+                AgroResult.failure(DomainError.ExactLocationRequired)
             !response.isSuccessful ->
                 AgroResult.failure(DomainError.RemoteFailure(response.code(), response.message()))
             body == null && response.code() == NO_CONTENT ->
@@ -264,10 +268,26 @@ class RetrofitSyncGateway @Inject constructor(
         const val NOT_MODIFIED = 304
         const val NO_CONTENT = 204
         const val UNAUTHORIZED = 401
+        const val UNPROCESSABLE = 422
+        const val EXACT_LOCATION_CODE = "ubicacion_exacta_requerida"
     }
 }
 
 // ── Mapeo dominio → DTO ──────────────────────────────────────────────────────
+
+/**
+ * `precision` sale del propio punto: un punto redondeado o de origen incierto se
+ * marca `coarse` y no lleva altitud. Nunca se etiqueta `exact` una coordenada que
+ * no lo es.
+ */
+internal fun GeoPoint.toDto() = LocationDto(
+    latitude = latitude,
+    longitude = longitude,
+    accuracyMeters = accuracyMeters,
+    precision = if (isExact) LocationDto.PRECISION_EXACT else LocationDto.PRECISION_COARSE,
+    altitudeMeters = altitudeMeters.takeIf { isExact },
+    mock = isMock,
+)
 
 private fun Capture.toDto() = CaptureDto(
     id = id,
@@ -287,7 +307,7 @@ private fun Capture.toDto() = CaptureDto(
     userConfirmed = userConfirmed,
     cropType = cropType?.name,
     plantOrgan = plantOrgan?.name,
-    location = location?.let { LocationDto(it.latitude, it.longitude, it.accuracyMeters) },
+    location = location?.toDto(),
 )
 
 private fun ReviewRequest.toDto() = ReviewRequestDto(
@@ -297,7 +317,7 @@ private fun ReviewRequest.toDto() = ReviewRequestDto(
     plantOrgan = plantOrgan.name,
     noteText = noteText,
     createdAt = createdAtEpochMillis,
-    location = location?.let { LocationDto(it.latitude, it.longitude, it.accuracyMeters) },
+    location = location?.toDto(),
     modelVersion = modelVersion,
     images = images.map { image ->
         ReviewImageDto(

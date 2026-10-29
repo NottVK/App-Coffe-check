@@ -82,6 +82,17 @@ data class ReviewRequestEntity(
 
     @ColumnInfo(name = "server_id")
     val serverId: String?,
+
+    @ColumnInfo(name = "altitude_m")
+    val altitudeM: Double? = null,
+
+    @ColumnInfo(name = "location_is_mock", defaultValue = "0")
+    val locationIsMock: Boolean = false,
+
+    /** 0 en las solicitudes anteriores a la migración 2→3: su coordenada pudo
+     *  guardarse redondeada, así que no se envía como exacta. */
+    @ColumnInfo(name = "location_is_exact", defaultValue = "0")
+    val locationIsExact: Boolean = false,
 )
 
 /**

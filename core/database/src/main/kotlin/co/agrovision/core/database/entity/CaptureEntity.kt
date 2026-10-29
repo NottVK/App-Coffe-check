@@ -105,6 +105,21 @@ data class CaptureEntity(
      *  pendiente en megabytes antes de gastar datos prepago (§9.4). */
     @ColumnInfo(name = "size_bytes")
     val sizeBytes: Long,
+
+    /** Altitud del fix, solo si el sistema la trajo. */
+    @ColumnInfo(name = "altitude_m")
+    val altitudeM: Double? = null,
+
+    @ColumnInfo(name = "location_is_mock", defaultValue = "0")
+    val locationIsMock: Boolean = false,
+
+    /**
+     * `latitude`/`longitude` son la coordenada EXACTA del fix. Las filas
+     * anteriores a la migración 2→3 quedan en 0: pudieron guardarse redondeadas a
+     * vereda y no hay forma de saberlo, así que no se tratan como exactas.
+     */
+    @ColumnInfo(name = "location_is_exact", defaultValue = "0")
+    val locationIsExact: Boolean = false,
 ) {
     // ByteArray compara por identidad: Room genera `equals` de data class y sin
     // esto dos filas idénticas se consideran distintas.

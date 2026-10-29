@@ -121,6 +121,16 @@ fun SettingsScreen(
                     onSelect = viewModel::setLocationPrecision,
                 )
             }
+            // Solo aparece si el productor ya aceptó en una solicitud; aceptar se
+            // hace en contexto, al enviarla, no desde aquí.
+            if (preferences.locationShareConsentAtEpochMillis != null) {
+                SwitchRow(
+                    text = stringResource(R.string.ajustes_ubicacion_solicitudes),
+                    supporting = stringResource(R.string.ajustes_ubicacion_solicitudes_ayuda),
+                    checked = true,
+                    onCheckedChange = { keep -> if (!keep) viewModel.revokeLocationShare() },
+                )
+            }
         }
 
         Section(title = stringResource(R.string.ajustes_pantalla), gutter = gutter) {

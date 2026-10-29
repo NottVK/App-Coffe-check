@@ -50,7 +50,7 @@ abstract class AgroVisionDatabase : RoomDatabase() {
     abstract fun syncCursorDao(): SyncCursorDao
 
     companion object {
-        const val VERSION = 2
+        const val VERSION = 3
         const val NAME = "agrovision.db"
     }
 }

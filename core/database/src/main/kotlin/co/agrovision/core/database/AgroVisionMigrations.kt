@@ -63,12 +63,36 @@ object AgroVisionMigrations {
     }
 
     /**
+     * 2 → 3 · Ubicación exacta, altitud y fix simulado.
+     *
+     * Hasta ahora `SaveCaptureUseCase` guardaba la coordenada ya redondeada si el
+     * productor elegía vereda, y la exacta se perdía: una solicitud posterior no
+     * podía enviarla. Desde esta versión Room guarda siempre la exacta y la
+     * preferencia se aplica al enviar.
+     *
+     * **Aditiva y no destructiva.** Las filas existentes conservan latitud y
+     * longitud tal cual, y quedan con `location_is_exact = 0`: no se sabe si se
+     * guardaron redondeadas, así que nunca se envían como exactas. Las capturas
+     * viejas siguen subiendo (como `coarse`); una solicitud de revisión sobre ellas
+     * exige capturar de nuevo o confirmar que el productor sigue en el lote.
+     */
+    val MIGRATION_2_3 = object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            listOf("captures", "review_requests").forEach { table ->
+                db.execSQL("ALTER TABLE $table ADD COLUMN altitude_m REAL")
+                db.execSQL("ALTER TABLE $table ADD COLUMN location_is_mock INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE $table ADD COLUMN location_is_exact INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+    }
+
+    /**
      * Room falla al abrir la base si encuentra una versión instalada para la que
      * no hay ruta de migración, y eso es exactamente lo que debe ocurrir: un
      * fallo ruidoso en desarrollo en lugar de una pérdida silenciosa de datos en
      * campo.
      */
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2)
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
 
     /** Utilidad para migraciones que solo añaden columnas nullable, que es el
      *  99 % del caso real. */
