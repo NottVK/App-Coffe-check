@@ -4,7 +4,6 @@ import co.agrovision.core.common.AgroResult
 import co.agrovision.core.model.DomainError
 import co.agrovision.core.model.capture.Capture
 import co.agrovision.core.model.capture.GeoPoint
-import co.agrovision.core.model.capture.LocationPrecision
 import co.agrovision.core.model.pest.CropType
 import co.agrovision.core.model.pest.PlantOrgan
 import co.agrovision.core.model.port.FixResult
@@ -45,13 +44,11 @@ class LocationSharingTest {
     private val gps = FakeLocationProvider(fieldFix)
 
     private fun settings(
-        precision: LocationPrecision = LocationPrecision.VEREDA,
         consentAt: Long? = CONSENT_AT,
     ) = FakeSettings(
         UserPreferences.DEFAULT.copy(
             trainingConsent = true,
             locationEnabled = true,
-            locationPrecision = precision,
             locationShareConsentAtEpochMillis = consentAt,
         )
     )
@@ -105,8 +102,8 @@ class LocationSharingTest {
     // ── La captura conserva la exacta ────────────────────────────────────────
 
     @Test
-    fun `una captura con VEREDA conserva la coordenada exacta en el dispositivo`() = runTest {
-        val capture = savedCapture(settings(LocationPrecision.VEREDA))
+    fun `una captura conserva la coordenada exacta en el dispositivo`() = runTest {
+        val capture = savedCapture(settings())
 
         val stored = captures.saved.single().location
         assertEquals(capture.location, stored)
@@ -115,24 +112,11 @@ class LocationSharingTest {
         assertEquals(true, stored?.isExact)
     }
 
-    @Test
-    fun `la preferencia VEREDA redondea solo lo que se envia, no lo guardado`() = runTest {
-        val stored = savedCapture(settings(LocationPrecision.VEREDA)).location!!
-
-        val outgoing = stored.withPrecision(LocationPrecision.VEREDA)
-
-        assertEquals(2.93, outgoing.latitude, 1e-9)
-        assertEquals(-75.28, outgoing.longitude, 1e-9)
-        assertEquals(false, outgoing.isExact)
-        assertNull(outgoing.altitudeMeters)
-        assertEquals(fieldFix.latitude, captures.saved.single().location?.latitude)
-    }
-
     // ── La solicitud fuerza exacta ───────────────────────────────────────────
 
     @Test
-    fun `la solicitud usa la coordenada exacta de la captura aunque la preferencia sea VEREDA`() = runTest {
-        val prefs = settings(LocationPrecision.VEREDA)
+    fun `la solicitud usa la coordenada exacta de la captura`() = runTest {
+        val prefs = settings()
         val capture = savedCapture(prefs)
 
         val review = (createReview(prefs)(request(capture.id)) as AgroResult.Success).value
@@ -146,8 +130,8 @@ class LocationSharingTest {
     }
 
     @Test
-    fun `una solicitud directa toma un fix nuevo exacto aunque la preferencia sea VEREDA`() = runTest {
-        val result = createReview(settings(LocationPrecision.VEREDA))(request(captureId = null))
+    fun `una solicitud directa toma un fix nuevo exacto`() = runTest {
+        val result = createReview(settings())(request(captureId = null))
         val review = (result as AgroResult.Success).value
 
         assertEquals(1, gps.fixRequests)
@@ -157,7 +141,7 @@ class LocationSharingTest {
 
     @Test
     fun `altitud y fix simulado viajan hasta la solicitud`() = runTest {
-        val prefs = settings(LocationPrecision.VEREDA)
+        val prefs = settings()
         val capture = savedCapture(prefs)
 
         val review = (createReview(prefs)(request(capture.id)) as AgroResult.Success).value

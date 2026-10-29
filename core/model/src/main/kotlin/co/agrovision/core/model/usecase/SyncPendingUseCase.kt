@@ -100,12 +100,7 @@ class SyncPendingUseCase @Inject constructor(
         val captureBatch = captures.nextBatchToUpload(AgroConstants.Sync.BATCH_SIZE, now)
         if (captureBatch.isNotEmpty()) {
             captureBatch.forEach { captures.updateSyncState(it.id, SyncState.UPLOADING) }
-            // La preferencia de precisión se aplica AQUÍ, a lo que sale del teléfono:
-            // en Room la coordenada queda exacta (la necesita una solicitud posterior).
-            val outgoingCaptures = captureBatch.map { capture ->
-                capture.copy(location = capture.location?.withPrecision(preferences.locationPrecision))
-            }
-            when (val result = gateway.uploadCaptures(outgoingCaptures)) {
+            when (val result = gateway.uploadCaptures(captureBatch)) {
                 is AgroResult.Failure -> {
                     if (result.error == DomainError.NotSignedIn) {
                         // De vuelta a la cola tal como estaban antes de marcarlas

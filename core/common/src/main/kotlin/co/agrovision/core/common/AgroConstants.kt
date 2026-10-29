@@ -90,10 +90,6 @@ object AgroConstants {
     }
 
     object Location {
-        /** Redondeo a nivel de vereda cuando el productor elige precisión
-         *  reducida. ~0.01° ≈ 1.1 km en el ecuador (§12.2). */
-        const val COARSE_GRID_DEGREES = 0.01
-
         val FRESHNESS: Duration = 2.minutes
 
         /** Espera máxima por un fix de GPS al pedir una revisión. Pasado esto se

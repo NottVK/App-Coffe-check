@@ -5,8 +5,6 @@ import androidx.lifecycle.viewModelScope
 import co.agrovision.core.common.AgroResult
 import co.agrovision.core.common.UiText
 import co.agrovision.core.model.identity.Account
-import co.agrovision.core.model.identity.CoffeeVariety
-import co.agrovision.core.model.identity.PlantingAge
 import co.agrovision.core.model.identity.ProducerProfile
 import co.agrovision.core.model.port.AccountRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -28,15 +26,12 @@ data class ProfileForm(
     val farmName: String = "",
     val vereda: String = "",
     val municipality: String = "",
-    val variety: CoffeeVariety? = null,
-    val plantingAge: PlantingAge? = null,
     /** Desmarcado por defecto: el consentimiento es explícito (§12.2). */
     val trainingConsent: Boolean = false,
 )
 
-/** Campos que el productor tiene que revisar. Incluye variedad y edad, que el
- *  backend no valida porque no los recibe. */
-enum class ProfileField { FULL_NAME, FARM_NAME, VEREDA, MUNICIPALITY, VARIETY, PLANTING_AGE }
+/** Campos que el productor tiene que revisar. */
+enum class ProfileField { FULL_NAME, FARM_NAME, VEREDA, MUNICIPALITY }
 
 data class SignInState(
     val step: SignInStep = SignInStep.PHONE,
@@ -171,7 +166,7 @@ class SignInViewModel @Inject constructor(
                         _effects.send(SignInEffect.Done)
                     } else {
                         // Con perfil ya registrado en el servidor, el formulario
-                        // llega relleno y solo falta lo del cafetal.
+                        // llega relleno.
                         _state.update { it.copy(step = SignInStep.PROFILE, profile = signedIn.toForm(), error = null) }
                     }
                 }
@@ -195,11 +190,7 @@ class SignInViewModel @Inject constructor(
                 ProducerProfile.Field.VEREDA -> ProfileField.VEREDA
                 ProducerProfile.Field.MUNICIPALITY -> ProfileField.MUNICIPALITY
             }
-        }.toSet() +
-            setOfNotNull(
-                ProfileField.VARIETY.takeIf { form.variety == null },
-                ProfileField.PLANTING_AGE.takeIf { form.plantingAge == null },
-            )
+        }.toSet()
         if (invalid.isNotEmpty()) {
             _state.update { it.copy(invalidFields = invalid) }
             return
@@ -208,10 +199,7 @@ class SignInViewModel @Inject constructor(
         runBusy {
             when (val result = account.saveProducerProfile(profile)) {
                 is AgroResult.Failure -> _state.update { it.copy(error = UiText.Message(result.error.message)) }
-                is AgroResult.Success -> {
-                    account.updateFarmDetails(checkNotNull(form.variety), checkNotNull(form.plantingAge))
-                    _effects.send(SignInEffect.Done)
-                }
+                is AgroResult.Success -> _effects.send(SignInEffect.Done)
             }
         }
     }
@@ -243,8 +231,6 @@ class SignInViewModel @Inject constructor(
         farmName = farmName.orEmpty(),
         vereda = vereda.orEmpty(),
         municipality = municipality.orEmpty(),
-        variety = coffeeVariety,
-        plantingAge = plantingAge,
         trainingConsent = trainingConsent,
     )
 

@@ -30,7 +30,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import co.agrovision.R
 import co.agrovision.core.designsystem.theme.AgroTheme
-import co.agrovision.core.model.capture.LocationPrecision
 import co.agrovision.core.model.settings.OutdoorMode
 import co.agrovision.core.model.settings.SyncNetworkPolicy
 import co.agrovision.feature.review.components.ChoiceGroup
@@ -113,14 +112,6 @@ fun SettingsScreen(
                     }
                 },
             )
-            if (preferences.locationEnabled) {
-                ChoiceGroup(
-                    options = LocationPrecision.entries,
-                    selected = preferences.locationPrecision,
-                    label = { stringResource(it.labelRes()) },
-                    onSelect = viewModel::setLocationPrecision,
-                )
-            }
             // Solo aparece si el productor ya aceptó en una solicitud; aceptar se
             // hace en contexto, al enviarla, no desde aquí.
             if (preferences.locationShareConsentAtEpochMillis != null) {
@@ -236,11 +227,6 @@ private fun SyncNetworkPolicy.labelRes(): Int = when (this) {
     SyncNetworkPolicy.SOLO_WIFI -> R.string.ajustes_red_wifi
     SyncNetworkPolicy.WIFI_Y_DATOS -> R.string.ajustes_red_datos
     SyncNetworkPolicy.PREGUNTAR -> R.string.ajustes_red_preguntar
-}
-
-private fun LocationPrecision.labelRes(): Int = when (this) {
-    LocationPrecision.EXACT -> R.string.ajustes_ubicacion_exacta
-    LocationPrecision.VEREDA -> R.string.ajustes_ubicacion_vereda
 }
 
 private fun OutdoorMode.labelRes(): Int = when (this) {

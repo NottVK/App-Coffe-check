@@ -46,10 +46,9 @@
     <string name="solicitud_cultivo">Cultivo</string>
     <string name="solicitud_parte">Parte de la planta</string>
     <string name="solicitud_variedad">Variedad del café</string>
+    <string name="solicitud_edad">¿Hace cuánto está sembrado?</string>
     <string name="solicitud_nota">¿Qué has notado?</string>
     <string name="solicitud_nota_ayuda">Desde cuándo lo ves, si hay más plantas así, si aplicaste algo…</string>
-    <string name="solicitud_cafetal">Tu cafetal</string>
-    <string name="solicitud_cafetal_valor">%1$s · sembrado hace %2$s</string>
     <string name="solicitud_enviar">Enviar al agrónomo</string>
 
     <!-- ── Ubicación exacta de la solicitud ───────────────────────────────── -->
@@ -110,13 +109,9 @@
     <string name="ingreso_finca">Nombre de la finca</string>
     <string name="ingreso_vereda">Vereda</string>
     <string name="ingreso_municipio">Municipio</string>
-    <string name="ingreso_seccion_cafetal">Tu cafetal</string>
-    <string name="ingreso_variedad">¿Qué variedad sembraste?</string>
-    <string name="ingreso_edad">¿Hace cuánto está sembrado, más o menos?</string>
     <string name="ingreso_consentimiento_titulo">Usar mis fotos para mejorar la app</string>
     <string name="ingreso_consentimiento_cuerpo">Tus fotos ayudan a que AgroVisión reconozca más plagas. Puedes cambiarlo cuando quieras.</string>
     <string name="ingreso_campo_invalido">Revisa este dato</string>
-    <string name="ingreso_elige_opcion">Elige una opción</string>
     <string name="ingreso_guardar">Guardar y enviar</string>
 
     <!-- ── Solicitud enviada ──────────────────────────────────────────────── -->
@@ -146,6 +141,8 @@
     <string name="lista_entrar">Entrar</string>
     <string name="lista_respuesta">Respuesta del agrónomo</string>
     <string name="lista_nueva">Nueva</string>
+    <string name="lista_eliminada">Solicitud eliminada</string>
+    <string name="lista_deshacer">Deshacer</string>
     <string name="lista_fotos">%1$d fotos</string>
 
     <string name="estado_por_enviar">Por enviar</string>

@@ -8,7 +8,6 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import co.agrovision.core.common.UuidV7
-import co.agrovision.core.model.capture.LocationPrecision
 import co.agrovision.core.model.port.SettingsRepository
 import co.agrovision.core.model.settings.OutdoorMode
 import co.agrovision.core.model.settings.SyncNetworkPolicy
@@ -47,7 +46,6 @@ class PreferencesStore @Inject constructor(
             val updated = transform(toDomain(preferences))
             preferences[Keys.SYNC_POLICY] = updated.syncNetworkPolicy.name
             preferences[Keys.LOCATION_ENABLED] = updated.locationEnabled
-            preferences[Keys.LOCATION_PRECISION] = updated.locationPrecision.name
             preferences[Keys.OUTDOOR_MODE] = updated.outdoorMode.name
             preferences[Keys.VOICE_READOUT] = updated.voiceReadout
             preferences[Keys.TRAINING_CONSENT] = updated.trainingConsent
@@ -72,9 +70,6 @@ class PreferencesStore @Inject constructor(
             ?: UserPreferences.DEFAULT.syncNetworkPolicy,
         locationEnabled = preferences[Keys.LOCATION_ENABLED]
             ?: UserPreferences.DEFAULT.locationEnabled,
-        locationPrecision = preferences[Keys.LOCATION_PRECISION]
-            ?.let { name -> LocationPrecision.entries.firstOrNull { it.name == name } }
-            ?: UserPreferences.DEFAULT.locationPrecision,
         outdoorMode = preferences[Keys.OUTDOOR_MODE]
             ?.let { name -> OutdoorMode.entries.firstOrNull { it.name == name } }
             ?: UserPreferences.DEFAULT.outdoorMode,
@@ -89,7 +84,6 @@ class PreferencesStore @Inject constructor(
     private object Keys {
         val SYNC_POLICY = stringPreferencesKey("sync_network_policy")
         val LOCATION_ENABLED = booleanPreferencesKey("location_enabled")
-        val LOCATION_PRECISION = stringPreferencesKey("location_precision")
         val OUTDOOR_MODE = stringPreferencesKey("outdoor_mode")
         val VOICE_READOUT = booleanPreferencesKey("voice_readout")
         val TRAINING_CONSENT = booleanPreferencesKey("training_consent")

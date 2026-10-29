@@ -4,7 +4,6 @@ import co.agrovision.core.common.AgroResult
 import co.agrovision.core.model.DomainError
 import co.agrovision.core.model.capture.Capture
 import co.agrovision.core.model.capture.GeoPoint
-import co.agrovision.core.model.capture.LocationPrecision
 import co.agrovision.core.model.capture.SyncStatus
 import co.agrovision.core.model.pest.CropType
 import co.agrovision.core.model.pest.PlantOrgan
@@ -154,8 +153,7 @@ class RetrofitSyncGatewayTest {
     @Test
     fun `una coordenada redondeada sale coarse y sin altitud`() = runBlocking<Unit> {
         api.enqueue(MockResponse().setBody("""{"results":[]}"""))
-        val coarse = GeoPoint(2.92734, -75.28197, 6f, altitudeMeters = 1432.5)
-            .withPrecision(LocationPrecision.VEREDA)
+        val coarse = GeoPoint(2.93, -75.28, null, isExact = false)
 
         gateway.uploadReviewRequests(listOf(review().copy(location = coarse)))
 

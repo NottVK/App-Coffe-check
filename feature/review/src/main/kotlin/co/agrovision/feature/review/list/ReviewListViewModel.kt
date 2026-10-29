@@ -9,12 +9,15 @@ import co.agrovision.core.model.review.ReviewRequest
 import co.agrovision.core.model.usecase.SyncPendingUseCase
 import co.agrovision.core.model.usecase.SyncTrigger
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -45,8 +48,15 @@ class ReviewListViewModel @Inject constructor(
     private val expanded = MutableStateFlow<String?>(null)
     private val sending = MutableStateFlow(false)
 
+    /** Solicitudes recién quitadas que aún se pueden deshacer: se ocultan al
+     *  instante y el borrado real espera [UNDO_WINDOW_MS]. */
+    private val hiddenIds = MutableStateFlow<Set<String>>(emptySet())
+    private val pendingDeletes = mutableMapOf<String, Job>()
+
     val state: StateFlow<ReviewListState> = combine(
-        reviews.observeMine(),
+        reviews.observeMine().combine(hiddenIds) { requests, hidden ->
+            requests.filter { it.id !in hidden }
+        },
         reviews.observeUnreadResolutions().map { unread -> unread.map { it.id }.toSet() },
         account.observe(),
         expanded,
@@ -80,8 +90,26 @@ class ReviewListViewModel @Inject constructor(
         }
     }
 
+    fun delete(request: ReviewRequest) {
+        val id = request.id
+        hiddenIds.update { it + id }
+        pendingDeletes[id] = viewModelScope.launch {
+            delay(UNDO_WINDOW_MS)
+            reviews.delete(id)
+            pendingDeletes.remove(id)
+            hiddenIds.update { it - id }
+        }
+    }
+
+    fun undoDelete(request: ReviewRequest) {
+        pendingDeletes.remove(request.id)?.cancel()
+        hiddenIds.update { it - request.id }
+    }
+
     private companion object {
         const val STOP_TIMEOUT_MS = 5_000L
+        /** Tiene que cubrir el tiempo que el aviso «Deshacer» está en pantalla. */
+        const val UNDO_WINDOW_MS = 6_000L
     }
 }
 

@@ -4,7 +4,6 @@ import co.agrovision.core.common.AgroResult
 import co.agrovision.core.model.DomainError
 import co.agrovision.core.model.capture.Capture
 import co.agrovision.core.model.capture.GeoPoint
-import co.agrovision.core.model.capture.LocationPrecision
 import co.agrovision.core.model.capture.SyncState
 import co.agrovision.core.model.capture.SyncStatus
 import co.agrovision.core.model.identity.Account
@@ -294,30 +293,12 @@ class SyncPendingUseCaseTest {
     // ── Ubicación ────────────────────────────────────────────────────────────
 
     @Test
-    fun `las capturas con VEREDA salen redondeadas y sin altitud`() = runTest {
-        val exact = GeoPoint(2.92734, -75.28197, 6f, altitudeMeters = 1_432.5, isMock = true)
-        coEvery { captures.nextBatchToUpload(any(), any()) } returns listOf(capture(exact))
-        coEvery { reviews.nextBatchToUpload(any(), any()) } returns emptyList()
-        coEvery { settings.current() } returns
-            UserPreferences.DEFAULT.copy(trainingConsent = true, locationPrecision = LocationPrecision.VEREDA)
-
-        runSync()
-
-        val sent = gateway.sentCaptures.single().location!!
-        assertEquals(2.93, sent.latitude, 1e-9)
-        assertEquals(-75.28, sent.longitude, 1e-9)
-        assertEquals(false, sent.isExact)
-        assertEquals(null, sent.altitudeMeters)
-        assertEquals(true, sent.isMock)
-    }
-
-    @Test
     fun `las capturas con EXACTA salen exactas con altitud y fix simulado`() = runTest {
         val exact = GeoPoint(2.92734, -75.28197, 6f, altitudeMeters = 1_432.5, isMock = true)
         coEvery { captures.nextBatchToUpload(any(), any()) } returns listOf(capture(exact))
         coEvery { reviews.nextBatchToUpload(any(), any()) } returns emptyList()
         coEvery { settings.current() } returns
-            UserPreferences.DEFAULT.copy(trainingConsent = true, locationPrecision = LocationPrecision.EXACT)
+            UserPreferences.DEFAULT.copy(trainingConsent = true)
 
         runSync()
 
@@ -325,13 +306,13 @@ class SyncPendingUseCaseTest {
     }
 
     @Test
-    fun `una captura antigua de origen incierto nunca sale como exacta aunque la preferencia sea EXACTA`() =
+    fun `una captura antigua de origen incierto nunca sale como exacta`() =
         runTest {
             val legacy = GeoPoint(2.93, -75.28, null, isExact = false)
             coEvery { captures.nextBatchToUpload(any(), any()) } returns listOf(capture(legacy))
             coEvery { reviews.nextBatchToUpload(any(), any()) } returns emptyList()
             coEvery { settings.current() } returns
-                UserPreferences.DEFAULT.copy(trainingConsent = true, locationPrecision = LocationPrecision.EXACT)
+                UserPreferences.DEFAULT.copy(trainingConsent = true)
 
             runSync()
 

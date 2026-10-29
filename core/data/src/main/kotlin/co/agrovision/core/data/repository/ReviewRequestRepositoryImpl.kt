@@ -16,6 +16,7 @@ import co.agrovision.core.model.capture.SyncState
 import co.agrovision.core.model.capture.SyncStatus
 import co.agrovision.core.model.pest.CropType
 import co.agrovision.core.model.pest.PlantOrgan
+import co.agrovision.core.model.port.ImageStore
 import co.agrovision.core.model.port.ReviewRequestRepository
 import co.agrovision.core.model.review.CaptureAngle
 import co.agrovision.core.model.review.RemoteReviewStatus
@@ -36,6 +37,7 @@ import javax.inject.Singleton
 class ReviewRequestRepositoryImpl @Inject constructor(
     private val dao: ReviewDao,
     private val cursors: SyncCursorDao,
+    private val images: ImageStore,
     @Dispatcher(AgroDispatcher.IO) private val io: CoroutineDispatcher,
 ) : ReviewRequestRepository {
 
@@ -115,6 +117,17 @@ class ReviewRequestRepositoryImpl @Inject constructor(
 
     override suspend fun markResolutionRead(id: String) = withContext(io) {
         dao.markResolutionRead(id)
+    }
+
+    override suspend fun delete(id: String) = withContext(io) {
+        val paths = dao.imagePathsOf(id).flatMap { listOf(it.imagePath, it.thumbnailPath) }.distinct()
+        // Primero la fila y después los archivos: si el proceso muere en medio
+        // queda un archivo huérfano, nunca una solicitud sin imágenes.
+        dao.deleteById(id)
+        if (paths.isNotEmpty()) {
+            val inUse = dao.pathsStillUsed(paths).toSet()
+            images.delete(paths.filterNot { it in inUse })
+        }
     }
 }
 

@@ -138,6 +138,10 @@ interface ReviewRequestRepository {
     suspend fun updateStatusCursor(sinceEpochMillis: Long)
 
     suspend fun markResolutionRead(id: String)
+
+    /** El productor quita una solicitud de su lista. Borra solo la copia del
+     *  teléfono —el servidor conserva la suya— y las imágenes que nadie más use. */
+    suspend fun delete(id: String)
 }
 
 /**
@@ -212,8 +216,9 @@ interface AccountRepository {
      */
     suspend fun markSessionExpired()
 
-    /** Variedad y edad del cafetal. Solo locales: ver `withFarmContext`. */
-    suspend fun updateFarmDetails(variety: CoffeeVariety, age: PlantingAge)
+    /** Variedad y edad del cafetal. Solo locales: ver `withFarmContext`. Lo que
+     *  llega nulo se deja como estaba. */
+    suspend fun updateFarmDetails(variety: CoffeeVariety? = null, age: PlantingAge? = null)
 
     /** La revocación tiene que llegar al servidor: si falla, se devuelve el error
      *  para que la interfaz no la dé por hecha. */

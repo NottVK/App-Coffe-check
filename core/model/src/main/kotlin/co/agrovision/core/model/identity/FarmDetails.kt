@@ -25,6 +25,9 @@ enum class CoffeeVariety(val label: String) {
 /** Encabezado con el que la variedad viaja en la nota de la solicitud. */
 const val VARIETY_PREFIX = "Variedad: "
 
+/** Encabezado con el que la edad de la siembra viaja en la nota. */
+const val AGE_PREFIX = "Sembrado hace: "
+
 /** Tiempo aproximado desde la siembra. En rangos porque el productor lo sabe
  *  «más o menos», y la edad del árbol cambia el diagnóstico probable. */
 enum class PlantingAge(val label: String) {
@@ -48,7 +51,9 @@ fun ReviewRequest.withFarmContext(account: Account): ReviewRequest {
         account.coffeeVariety
             ?.takeUnless { noteText?.startsWith(VARIETY_PREFIX) == true }
             ?.let { "$VARIETY_PREFIX${it.label}" },
-        account.plantingAge?.let { "Sembrado hace: ${it.label}" },
+        account.plantingAge
+            ?.takeUnless { noteText?.contains(AGE_PREFIX) == true }
+            ?.let { "$AGE_PREFIX${it.label}" },
     ).joinToString(" · ")
     if (context.isEmpty()) return this
 

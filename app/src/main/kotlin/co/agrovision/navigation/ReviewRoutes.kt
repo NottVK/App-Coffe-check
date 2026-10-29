@@ -103,5 +103,7 @@ fun ReviewListRoute(onSignIn: () -> Unit, onNewRequest: () -> Unit) {
         onSendNow = viewModel::onSendNow,
         onSignIn = onSignIn,
         onNewRequest = onNewRequest,
+        onDelete = viewModel::delete,
+        onUndoDelete = viewModel::undoDelete,
     )
 }

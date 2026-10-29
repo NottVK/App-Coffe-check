@@ -11,6 +11,11 @@ import co.agrovision.core.database.entity.ReviewRequestEntity
 import co.agrovision.core.database.entity.ReviewRequestWithImages
 import kotlinx.coroutines.flow.Flow
 
+data class ReviewImagePaths(
+    @androidx.room.ColumnInfo(name = "image_path") val imagePath: String,
+    @androidx.room.ColumnInfo(name = "thumbnail_path") val thumbnailPath: String,
+)
+
 @Dao
 interface ReviewDao {
 
@@ -131,6 +136,28 @@ interface ReviewDao {
 
     @Query("UPDATE review_requests SET resolution_read = 1 WHERE id = :id")
     suspend fun markResolutionRead(id: String)
+
+    @Query("SELECT image_path, thumbnail_path FROM review_request_images WHERE review_request_id = :id")
+    suspend fun imagePathsOf(id: String): List<ReviewImagePaths>
+
+    /** Las imágenes se borran en cascada con la solicitud. */
+    @Query("DELETE FROM review_requests WHERE id = :id")
+    suspend fun deleteById(id: String)
+
+    /** Rutas que otra solicitud o un análisis del historial siguen usando: la
+     *  solicitud nace de la foto del escaneo y comparte el archivo. */
+    @Query(
+        """
+        SELECT image_path FROM review_request_images WHERE image_path IN (:paths)
+        UNION
+        SELECT thumbnail_path FROM review_request_images WHERE thumbnail_path IN (:paths)
+        UNION
+        SELECT image_path FROM captures WHERE image_path IN (:paths)
+        UNION
+        SELECT thumbnail_path FROM captures WHERE thumbnail_path IN (:paths)
+        """
+    )
+    suspend fun pathsStillUsed(paths: List<String>): List<String>
 
     @Query("SELECT COUNT(*) FROM review_requests WHERE sync_state = 'PENDING'")
     fun observePendingCount(): Flow<Int>

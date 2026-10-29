@@ -7,6 +7,7 @@ import co.agrovision.core.common.AgroResult
 import co.agrovision.core.common.MessageKey
 import co.agrovision.core.common.UiText
 import co.agrovision.core.model.DomainError
+import co.agrovision.core.model.identity.AGE_PREFIX
 import co.agrovision.core.model.identity.CoffeeVariety
 import co.agrovision.core.model.identity.PlantingAge
 import co.agrovision.core.model.identity.VARIETY_PREFIX
@@ -98,6 +99,7 @@ sealed interface CreateReviewIntent {
     data class SetCrop(val crop: CropType) : CreateReviewIntent
     data class SetOrgan(val organ: PlantOrgan) : CreateReviewIntent
     data class SetVariety(val variety: CoffeeVariety) : CreateReviewIntent
+    data class SetPlantingAge(val age: PlantingAge) : CreateReviewIntent
     data class SetNote(val note: String) : CreateReviewIntent
     data object Submit : CreateReviewIntent
     data object AcceptLocationConsent : CreateReviewIntent
@@ -191,6 +193,7 @@ class CreateReviewViewModel @Inject constructor(
             is CreateReviewIntent.SetCrop -> _state.update { it.copy(cropType = intent.crop) }
             is CreateReviewIntent.SetOrgan -> _state.update { it.copy(plantOrgan = intent.organ) }
             is CreateReviewIntent.SetVariety -> _state.update { it.copy(variety = intent.variety) }
+            is CreateReviewIntent.SetPlantingAge -> _state.update { it.copy(plantingAge = intent.age) }
             is CreateReviewIntent.SetNote -> _state.update { it.copy(note = intent.note) }
             CreateReviewIntent.Submit -> submit()
             CreateReviewIntent.AcceptLocationConsent -> acceptLocationConsent()
@@ -308,10 +311,13 @@ class CreateReviewViewModel @Inject constructor(
                     },
                     cropType = state.cropType,
                     plantOrgan = state.plantOrgan,
-                    // La variedad elegida viaja al agrónomo en la nota, igual que
-                    // la del perfil (ver `withFarmContext`).
+                    // Variedad y edad elegidas viajan al agrónomo en la nota
+                    // (ver `withFarmContext`).
                     noteText = listOfNotNull(
-                        state.variety?.let { "$VARIETY_PREFIX${it.label}" },
+                        listOfNotNull(
+                            state.variety?.let { "$VARIETY_PREFIX${it.label}" },
+                            state.plantingAge?.let { "$AGE_PREFIX${it.label}" },
+                        ).joinToString(" · ").takeIf { it.isNotEmpty() },
                         state.note.trim().takeIf { it.isNotEmpty() },
                     ).joinToString(NOTE_SEPARATOR).takeIf { it.isNotEmpty() },
                     noteAudioPath = null,
@@ -329,6 +335,8 @@ class CreateReviewViewModel @Inject constructor(
                     )
                 }
                 is AgroResult.Success -> {
+                    // Lo elegido queda como punto de partida de la próxima solicitud.
+                    account.updateFarmDetails(state.variety, state.plantingAge)
                     val current = account.current()
                     val effect = if (current.needsSignIn || current.needsProfile) {
                         CreateReviewEffect.SignIn(result.value.id)

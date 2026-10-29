@@ -54,13 +54,14 @@ data class Account(
     val coffeeVariety: CoffeeVariety? = null,
     val plantingAge: PlantingAge? = null,
 ) {
-    /** Lo que falta para poder enviar solicitudes: sesión vigente, perfil en el
-     *  servidor y los datos del cafetal. */
+    /** Lo que falta para poder enviar solicitudes: sesión vigente y perfil en el
+     *  servidor. Los datos del cafetal cambian seguido y se editan en Ajustes;
+     *  no bloquean el envío. */
     val needsSignIn: Boolean
         get() = tier == UserTier.T0_ANONIMO || sessionExpired
 
     val needsProfile: Boolean
-        get() = tier != UserTier.T2_VALIDADO || coffeeVariety == null || plantingAge == null
+        get() = tier != UserTier.T2_VALIDADO
 
     companion object {
         fun anonymous(deviceId: String) = Account(

@@ -1,11 +1,8 @@
 package co.agrovision.core.model.settings
 
-import co.agrovision.core.model.capture.LocationPrecision
-
 data class UserPreferences(
     val syncNetworkPolicy: SyncNetworkPolicy,
     val locationEnabled: Boolean,
-    val locationPrecision: LocationPrecision,
     val outdoorMode: OutdoorMode,
     val voiceReadout: Boolean,
     val trainingConsent: Boolean,
@@ -31,7 +28,6 @@ data class UserPreferences(
         val DEFAULT = UserPreferences(
             syncNetworkPolicy = SyncNetworkPolicy.WIFI_Y_DATOS,
             locationEnabled = false,
-            locationPrecision = LocationPrecision.VEREDA,
             outdoorMode = OutdoorMode.AUTO,
             voiceReadout = false,
             trainingConsent = false,

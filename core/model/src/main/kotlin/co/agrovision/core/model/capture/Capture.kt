@@ -6,7 +6,6 @@ import co.agrovision.core.model.pest.PlantOrgan
 import co.agrovision.core.model.scan.Embedding
 import co.agrovision.core.model.scan.GateOutcome
 import co.agrovision.core.model.scan.Prediction
-import kotlin.math.round
 
 /**
  * Un escaneo persistido. La fila existe antes de que se intente cualquier
@@ -80,19 +79,12 @@ enum class SyncState {
 /**
  * Coordenada del lote.
  *
- * La ubicación es opcional y se pide en contexto, nunca al arrancar. El
- * productor puede además elegir precisión reducida: en un conflicto de tierras
- * o frente a un comprador, la coordenada exacta de un lote es información
- * sensible, y no es asunto nuestro decidir por él (§12.2).
+ * La ubicación es opcional y se pide en contexto, nunca al arrancar. Cuando
+ * se usa, siempre es la coordenada exacta (§12.2).
  *
- * **La coordenada se guarda siempre exacta en el dispositivo** y la precisión
- * elegida se aplica solo al construir lo que SALE del teléfono
- * ([withPrecision]). Si se redondeara al guardar, una solicitud de revisión
- * posterior ya no tendría la coordenada exacta de la foto.
- *
- * [isExact] es falso en dos casos: tras redondear a vereda y en las filas
- * anteriores a esta distinción, de las que no se sabe si se guardaron
- * redondeadas. Una coordenada no exacta jamás se envía como si lo fuera.
+ * [isExact] es falso solo en las filas anteriores a esta distinción, de las que
+ * no se sabe si se guardaron redondeadas. Una coordenada no exacta jamás se
+ * envía como si lo fuera.
  */
 data class GeoPoint(
     val latitude: Double,
@@ -103,24 +95,4 @@ data class GeoPoint(
     /** El sistema marcó el fix como simulado (`isMock` / `isFromMockProvider`). */
     val isMock: Boolean = false,
     val isExact: Boolean = true,
-) {
-    fun withPrecision(precision: LocationPrecision): GeoPoint = when (precision) {
-        LocationPrecision.EXACT -> this
-        LocationPrecision.VEREDA -> {
-            val grid = AgroConstants.Location.COARSE_GRID_DEGREES
-            GeoPoint(
-                latitude = round(latitude / grid) * grid,
-                longitude = round(longitude / grid) * grid,
-                accuracyMeters = null,
-                altitudeMeters = null,
-                isMock = isMock,
-                isExact = false,
-            )
-        }
-    }
-}
-
-enum class LocationPrecision {
-    EXACT,
-    VEREDA,
-}
+)

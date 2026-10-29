@@ -4,7 +4,6 @@ import co.agrovision.core.common.AgroResult
 import co.agrovision.core.model.DomainError
 import co.agrovision.core.model.capture.Capture
 import co.agrovision.core.model.capture.GeoPoint
-import co.agrovision.core.model.capture.LocationPrecision
 import co.agrovision.core.model.capture.SyncState
 import co.agrovision.core.model.pest.PestTaxon
 import co.agrovision.core.model.port.CaptureRepository
@@ -205,6 +204,9 @@ class FakeReviewRepository : ReviewRequestRepository {
     override suspend fun statusCursor(): Long? = null
     override suspend fun updateStatusCursor(sinceEpochMillis: Long) = Unit
     override suspend fun markResolutionRead(id: String) = Unit
+    override suspend fun delete(id: String) {
+        saved.removeAll { it.id == id }
+    }
 }
 
 class FakeTelemetry : TelemetryRecorder {
@@ -242,6 +244,3 @@ class SequentialIds(private val prefix: String = "captura-") : IdGenerator {
     private var counter = 0
     override fun newId(): String = "$prefix${++counter}"
 }
-
-/** Se ignora en las pruebas de este archivo, pero el caso de uso lo exige. */
-val NoLocation = LocationPrecision.VEREDA

@@ -36,10 +36,7 @@ import androidx.compose.ui.unit.sp
 import co.agrovision.core.designsystem.component.PrimaryFieldButton
 import co.agrovision.core.designsystem.text.resolve
 import co.agrovision.core.designsystem.theme.AgroTheme
-import co.agrovision.core.model.identity.CoffeeVariety
-import co.agrovision.core.model.identity.PlantingAge
 import co.agrovision.feature.review.R
-import co.agrovision.feature.review.components.ChoiceGroup
 import co.agrovision.feature.review.components.FieldInput
 import co.agrovision.feature.review.components.ReviewHero
 import co.agrovision.feature.review.components.ReviewTopBar
@@ -211,32 +208,6 @@ private fun ProfileStep(state: SignInState, onIntent: (SignInIntent) -> Unit) {
         )
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        SectionTitle(stringResource(R.string.ingreso_seccion_cafetal))
-        ChoiceQuestion(
-            title = stringResource(R.string.ingreso_variedad),
-            missing = ProfileField.VARIETY in invalid,
-        ) {
-            ChoiceGroup(
-                options = CoffeeVariety.entries,
-                selected = form.variety,
-                label = { it.label },
-                onSelect = { v -> onIntent(SignInIntent.EditProfile { it.copy(variety = v) }) },
-            )
-        }
-        ChoiceQuestion(
-            title = stringResource(R.string.ingreso_edad),
-            missing = ProfileField.PLANTING_AGE in invalid,
-        ) {
-            ChoiceGroup(
-                options = PlantingAge.entries,
-                selected = form.plantingAge,
-                label = { it.label },
-                onSelect = { v -> onIntent(SignInIntent.EditProfile { it.copy(plantingAge = v) }) },
-            )
-        }
-    }
-
     ConsentCard(
         checked = form.trainingConsent,
         onCheckedChange = { v -> onIntent(SignInIntent.EditProfile { it.copy(trainingConsent = v) }) },
@@ -249,21 +220,6 @@ private fun ProfileStep(state: SignInState, onIntent: (SignInIntent) -> Unit) {
         enabled = !state.busy,
         onClick = { onIntent(SignInIntent.SaveProfile) },
     )
-}
-
-@Composable
-private fun ChoiceQuestion(title: String, missing: Boolean, content: @Composable () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(text = title, style = MaterialTheme.typography.titleMedium)
-        content()
-        if (missing) {
-            Text(
-                text = stringResource(R.string.ingreso_elige_opcion),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
-    }
 }
 
 /** El consentimiento, como tarjeta con interruptor: se lee entero antes de tocar. */

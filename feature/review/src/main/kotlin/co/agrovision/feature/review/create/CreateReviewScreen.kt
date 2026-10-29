@@ -26,7 +26,6 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Eco
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -48,6 +47,7 @@ import co.agrovision.core.designsystem.component.SecondaryFieldButton
 import co.agrovision.core.designsystem.text.resolve
 import co.agrovision.core.designsystem.theme.AgroTheme
 import co.agrovision.core.model.identity.CoffeeVariety
+import co.agrovision.core.model.identity.PlantingAge
 import co.agrovision.core.model.pest.CropType
 import co.agrovision.core.model.pest.PlantOrgan
 import co.agrovision.core.model.review.CaptureAngle
@@ -56,7 +56,6 @@ import co.agrovision.feature.review.R
 import co.agrovision.feature.review.components.ChoiceGroup
 import co.agrovision.feature.review.components.FieldInput
 import co.agrovision.feature.review.components.GUIDED_ANGLES
-import co.agrovision.feature.review.components.InfoCard
 import co.agrovision.feature.review.components.ReviewHero
 import co.agrovision.feature.review.components.ReviewTopBar
 import co.agrovision.feature.review.components.SectionTitle
@@ -368,6 +367,19 @@ private fun ReviewForm(
                 modifier = Modifier.padding(horizontal = gutter),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                SectionTitle(stringResource(R.string.solicitud_edad))
+                ChoiceGroup(
+                    options = PlantingAge.entries,
+                    selected = state.plantingAge,
+                    label = { it.label },
+                    onSelect = { onIntent(CreateReviewIntent.SetPlantingAge(it)) },
+                )
+            }
+
+            Column(
+                modifier = Modifier.padding(horizontal = gutter),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 SectionTitle(stringResource(R.string.solicitud_nota))
                 FieldInput(
                     value = state.note,
@@ -377,19 +389,6 @@ private fun ReviewForm(
                     singleLine = false,
                     minLines = 3,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                )
-            }
-
-            if (state.variety != null && state.plantingAge != null) {
-                InfoCard(
-                    icon = Icons.Filled.Eco,
-                    title = stringResource(R.string.solicitud_cafetal),
-                    body = stringResource(
-                        R.string.solicitud_cafetal_valor,
-                        state.variety.label,
-                        state.plantingAge.label.lowercase(),
-                    ),
-                    modifier = Modifier.padding(horizontal = gutter),
                 )
             }
 

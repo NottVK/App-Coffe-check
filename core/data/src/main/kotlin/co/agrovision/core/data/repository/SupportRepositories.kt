@@ -171,8 +171,10 @@ class AccountRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun updateFarmDetails(variety: CoffeeVariety, age: PlantingAge) {
-        store.update { it.copy(coffeeVariety = variety, plantingAge = age) }
+    override suspend fun updateFarmDetails(variety: CoffeeVariety?, age: PlantingAge?) {
+        store.update {
+            it.copy(coffeeVariety = variety ?: it.coffeeVariety, plantingAge = age ?: it.plantingAge)
+        }
     }
 
     /** Un 401 en cualquier llamada autenticada vence la sesión. */

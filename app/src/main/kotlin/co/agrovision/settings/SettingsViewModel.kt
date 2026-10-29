@@ -4,7 +4,6 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.agrovision.core.common.AgroResult
-import co.agrovision.core.model.capture.LocationPrecision
 import co.agrovision.core.model.port.AccountRepository
 import co.agrovision.core.model.port.SettingsRepository
 import co.agrovision.core.model.settings.OutdoorMode
@@ -62,9 +61,6 @@ class SettingsViewModel @Inject constructor(
     fun setSyncPolicy(policy: SyncNetworkPolicy) = update { it.copy(syncNetworkPolicy = policy) }
 
     fun setLocationEnabled(enabled: Boolean) = update { it.copy(locationEnabled = enabled) }
-
-    fun setLocationPrecision(precision: LocationPrecision) =
-        update { it.copy(locationPrecision = precision) }
 
     /** Retira el permiso de compartir la ubicación exacta en solicitudes; la
      *  próxima solicitud vuelve a preguntar. */

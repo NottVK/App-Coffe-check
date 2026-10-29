@@ -18,14 +18,26 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,6 +55,7 @@ import co.agrovision.feature.review.R
 import co.agrovision.feature.review.components.InfoCard
 import co.agrovision.feature.review.components.displayStatus
 import co.agrovision.feature.review.components.label
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -55,11 +68,19 @@ fun ReviewListScreen(
     onSendNow: () -> Unit,
     onSignIn: () -> Unit,
     onNewRequest: () -> Unit,
+    onDelete: (ReviewRequest) -> Unit,
+    onUndoDelete: (ReviewRequest) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val gutter = AgroTheme.dimensions.gutter
+    val snackbars = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val deletedMessage = stringResource(R.string.lista_eliminada)
+    val undoLabel = stringResource(R.string.lista_deshacer)
+
+    Box(modifier = modifier.fillMaxSize()) {
     LazyColumn(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(start = gutter, end = gutter, bottom = AgroTheme.dimensions.gutterWide),
@@ -132,13 +153,80 @@ fun ReviewListScreen(
         }
 
         items(state.requests, key = { it.id }) { request ->
-            RequestCard(
-                request = request,
-                unread = request.id in state.unreadIds,
-                expanded = request.id == state.expandedId,
-                onClick = { onToggle(request) },
-            )
+            SwipeableRequest(
+                onDelete = {
+                    onDelete(request)
+                    // Un aviso a la vez: el nuevo reemplaza al anterior.
+                    scope.launch {
+                        snackbars.currentSnackbarData?.dismiss()
+                        val result = snackbars.showSnackbar(
+                            message = deletedMessage,
+                            actionLabel = undoLabel,
+                            duration = SnackbarDuration.Short,
+                        )
+                        if (result == SnackbarResult.ActionPerformed) onUndoDelete(request)
+                    }
+                },
+                modifier = Modifier.animateItem(),
+            ) {
+                RequestCard(
+                    request = request,
+                    unread = request.id in state.unreadIds,
+                    expanded = request.id == state.expandedId,
+                    onClick = { onToggle(request) },
+                )
+            }
         }
+    }
+    SnackbarHost(
+        hostState = snackbars,
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(16.dp),
+    )
+    }
+}
+
+/** Deslizar a la izquierda quita la solicitud; «Deshacer» cubre el deslizar sin querer. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeableRequest(
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.EndToStart) {
+                onDelete()
+                true
+            } else {
+                false
+            }
+        },
+    )
+    SwipeToDismissBox(
+        state = dismissState,
+        modifier = modifier,
+        enableDismissFromStartToEnd = false,
+        backgroundContent = {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(MaterialTheme.colorScheme.errorContainer)
+                    .padding(horizontal = 20.dp),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Delete,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                )
+            }
+        },
+    ) {
+        content()
     }
 }
 
