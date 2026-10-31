@@ -7,6 +7,7 @@ import co.agrovision.core.common.AgroDispatcher
 import co.agrovision.core.common.Dispatcher
 import co.agrovision.core.common.AgroResult
 import co.agrovision.core.model.mlmodel.ModelUpdateDecision
+import co.agrovision.core.model.port.CaptureRepository
 import co.agrovision.core.model.port.ModelRegistryRepository
 import co.agrovision.core.model.port.SettingsRepository
 import co.agrovision.core.model.port.ConnectivityMonitor
@@ -17,7 +18,13 @@ import co.agrovision.core.model.usecase.SyncPendingUseCase
 import co.agrovision.core.model.usecase.SyncTrigger
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -51,6 +58,7 @@ class ForegroundSyncTrigger @Inject constructor(
     private val activateModel: ActivateModelUseCase,
     private val rollBackModel: RollBackModelUseCase,
     private val connectivity: ConnectivityMonitor,
+    private val captures: CaptureRepository,
     @Dispatcher(AgroDispatcher.IO) private val io: CoroutineDispatcher,
 ) : DefaultLifecycleObserver {
 
@@ -88,7 +96,34 @@ class ForegroundSyncTrigger @Inject constructor(
         }
     }
 
+    private var pendingWatcher: Job? = null
+
+    /**
+     * Mientras la app está en primer plano, sube lo que se vaya encolando sin
+     * esperar a que el productor salga y vuelva a entrar. Si el envío falla (sin
+     * red, cuenta sin validar) la cuenta de pendientes no cambia, así que no hay
+     * reintentos en bucle: el siguiente intento lo dispara otra captura o el
+     * próximo primer plano.
+     */
+    @OptIn(FlowPreview::class)
+    private fun watchPending() {
+        pendingWatcher?.cancel()
+        pendingWatcher = scope.launch {
+            captures.observePendingCount()
+                .distinctUntilChanged()
+                .filter { it > 0 }
+                .debounce(PENDING_DEBOUNCE_MILLIS)
+                .collect { syncPending(SyncTrigger.FOREGROUND) }
+        }
+    }
+
+    override fun onStop(owner: LifecycleOwner) {
+        pendingWatcher?.cancel()
+        pendingWatcher = null
+    }
+
     override fun onStart(owner: LifecycleOwner) {
+        watchPending()
         scope.launch {
             // No se comprueba conectividad aquí: el caso de uso ya lo hace y
             // devuelve `NoConnection` sin efectos. Duplicar la comprobación
@@ -106,5 +141,10 @@ class ForegroundSyncTrigger @Inject constructor(
             scheduler.scheduleOpportunistic(preferences.syncNetworkPolicy)
             scheduler.scheduleModelCheck(preferences.syncNetworkPolicy)
         }
+    }
+
+    private companion object {
+        /** Agrupa ráfagas de escaneos en un solo envío. */
+        const val PENDING_DEBOUNCE_MILLIS = 2_000L
     }
 }

@@ -10,16 +10,21 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -30,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import co.agrovision.R
 import co.agrovision.core.designsystem.theme.AgroTheme
+import co.agrovision.core.model.mlmodel.ModelUpdateFailure
 import co.agrovision.core.model.settings.OutdoorMode
 import co.agrovision.core.model.settings.SyncNetworkPolicy
 import co.agrovision.feature.review.components.ChoiceGroup
@@ -157,6 +163,10 @@ fun SettingsScreen(
             )
         }
 
+        Section(title = stringResource(R.string.ajustes_modelo), gutter = gutter) {
+            ModelSection(state = state.model, onCheck = viewModel::checkModelNow)
+        }
+
         Section(title = stringResource(R.string.ajustes_privacidad), gutter = gutter) {
             SwitchRow(
                 text = stringResource(R.string.ajustes_entrenamiento),
@@ -239,3 +249,80 @@ private fun versionName(context: android.content.Context): String =
     runCatching {
         context.packageManager.getPackageInfo(context.packageName, 0).versionName
     }.getOrNull().orEmpty()
+
+@Composable
+private fun ModelSection(state: ModelStatusUi, onCheck: () -> Unit) {
+    val muted = AgroTheme.semantic.mutedText
+    val checking = state.phase == ModelCheckPhase.CHECKING
+
+    Text(
+        text = state.activeVersion?.let { stringResource(R.string.ajustes_modelo_version, it) }
+            ?: stringResource(R.string.ajustes_modelo_fabrica),
+        style = MaterialTheme.typography.titleMedium,
+    )
+    if (state.installedAtEpochMillis > 0L) {
+        Text(
+            text = stringResource(R.string.ajustes_modelo_instalado, formatDate(state.installedAtEpochMillis)),
+            style = MaterialTheme.typography.bodyMedium,
+            color = muted,
+        )
+    }
+    Text(
+        text = if (state.lastCheckEpochMillis > 0L) {
+            stringResource(R.string.ajustes_modelo_revisado, formatDate(state.lastCheckEpochMillis))
+        } else {
+            stringResource(R.string.ajustes_modelo_nunca_revisado)
+        },
+        style = MaterialTheme.typography.bodyMedium,
+        color = muted,
+    )
+
+    val (message, isError) = when (state.phase) {
+        ModelCheckPhase.IDLE -> null to false
+        ModelCheckPhase.CHECKING -> stringResource(R.string.ajustes_modelo_buscando) to false
+        ModelCheckPhase.UP_TO_DATE -> stringResource(R.string.ajustes_modelo_al_dia) to false
+        ModelCheckPhase.UPDATED ->
+            stringResource(R.string.ajustes_modelo_actualizado, state.updatedToVersion.orEmpty()) to false
+        ModelCheckPhase.REQUIRES_APP_UPDATE ->
+            stringResource(R.string.ajustes_modelo_requiere_app, state.requiredAppVersion.orEmpty()) to true
+        ModelCheckPhase.FAILED -> stringResource(R.string.ajustes_modelo_fallo) to true
+    }
+    if (message != null) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+        )
+    }
+    // Un fallo anterior (p. ej. firma inválida) sigue visible hasta que una
+    // actualización lo supere: antes solo quedaba en el log.
+    if (state.lastFailure != null && state.phase == ModelCheckPhase.IDLE) {
+        Text(
+            text = stringResource(state.lastFailure.messageRes()),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
+
+    Button(onClick = onCheck, enabled = !checking, modifier = Modifier.fillMaxWidth()) {
+        if (checking) {
+            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(stringResource(R.string.ajustes_modelo_buscar))
+    }
+}
+
+private fun ModelUpdateFailure.messageRes(): Int = when (this) {
+    ModelUpdateFailure.NETWORK -> R.string.ajustes_modelo_err_red
+    ModelUpdateFailure.INTEGRITY_MISMATCH -> R.string.ajustes_modelo_err_integridad
+    ModelUpdateFailure.SIGNATURE_INVALID -> R.string.ajustes_modelo_err_firma
+    ModelUpdateFailure.CALIBRATION_MISSING -> R.string.ajustes_modelo_err_calibracion
+    ModelUpdateFailure.SMOKE_TEST_FAILED -> R.string.ajustes_modelo_err_prueba
+    ModelUpdateFailure.STORAGE_FULL -> R.string.ajustes_modelo_err_espacio
+    ModelUpdateFailure.INCOMPATIBLE_APP_VERSION -> R.string.ajustes_modelo_err_app
+}
+
+private fun formatDate(epochMillis: Long): String =
+    java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT)
+        .format(java.util.Date(epochMillis))

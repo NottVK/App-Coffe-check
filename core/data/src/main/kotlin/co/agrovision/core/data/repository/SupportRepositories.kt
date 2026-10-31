@@ -50,6 +50,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Cuenta del productor.
@@ -239,13 +240,62 @@ class LocationProviderImpl @Inject constructor(
         // Se recorren todos los proveedores y se toma el fix más reciente que
         // siga dentro de la ventana de frescura. Una coordenada de hace media
         // hora es de otro lote.
-        manager.providers(enabledOnly = true)
+        val cached = manager.providers(enabledOnly = true)
             .mapNotNull { provider ->
                 runCatching { manager.getLastKnownLocation(provider) }.getOrNull()
             }
             .filter { now - it.time <= freshnessWindow }
             .maxByOrNull { it.time }
-            ?.toGeoPoint()
+        if (cached != null) return@withContext cached.toGeoPoint()
+
+        // Sin fix reciente en el sistema (nadie más lo pidió) no se queda sin
+        // ubicación: se pide uno nuevo, con espera corta para no frenar la captura.
+        requestQuickFix(manager, QUICK_FIX_TIMEOUT)?.toGeoPoint()
+    }
+
+    private suspend fun requestQuickFix(manager: LocationManager, timeout: Duration): Location? {
+        val providers = manager.providers(enabledOnly = true)
+            .filter { it == LocationManager.GPS_PROVIDER || it == LocationManager.NETWORK_PROVIDER }
+        if (providers.isEmpty()) return null
+
+        val best = AtomicReference<Location?>(null)
+        var onGoodFix: (() -> Unit)? = null
+        val listener = object : LocationListener {
+            override fun onLocationChanged(location: Location) {
+                val current = best.get()
+                if (current == null || location.accuracyOrWorst() < current.accuracyOrWorst()) {
+                    best.set(location)
+                }
+                if (location.accuracyOrWorst() <= AgroConstants.Location.TARGET_ACCURACY_METERS) {
+                    onGoodFix?.invoke()
+                }
+            }
+
+            @Deprecated("Sin uso desde API 29")
+            override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) = Unit
+            override fun onProviderEnabled(provider: String) = Unit
+            override fun onProviderDisabled(provider: String) = Unit
+        }
+
+        try {
+            withTimeoutOrNull(timeout) {
+                suspendCancellableCoroutine<Unit> { continuation ->
+                    onGoodFix = { if (continuation.isActive) continuation.resume(Unit) }
+                    try {
+                        providers.forEach { provider ->
+                            manager.requestLocationUpdates(provider, 0L, 0f, listener, Looper.getMainLooper())
+                        }
+                    } catch (error: SecurityException) {
+                        continuation.resume(Unit)
+                    }
+                }
+            }
+        } finally {
+            runCatching { manager.removeUpdates(listener) }
+        }
+        return best.get()?.takeIf {
+            it.accuracyOrWorst() <= AgroConstants.Location.MAX_ACCEPTABLE_ACCURACY_METERS
+        }
     }
 
     /**
@@ -306,6 +356,10 @@ class LocationProviderImpl @Inject constructor(
             ?.takeIf { it.accuracyOrWorst() <= AgroConstants.Location.MAX_ACCEPTABLE_ACCURACY_METERS }
             ?: return if (hasFinePermission()) FixResult.TimedOut else FixResult.PermissionDenied
         return FixResult.Fix(fix.toGeoPoint())
+    }
+
+    private companion object {
+        val QUICK_FIX_TIMEOUT: Duration = 4.seconds
     }
 
     private fun Location.accuracyOrWorst(): Float = if (hasAccuracy()) accuracy else Float.MAX_VALUE

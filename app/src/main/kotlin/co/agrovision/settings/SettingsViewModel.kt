@@ -4,11 +4,17 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.agrovision.core.common.AgroResult
+import co.agrovision.core.model.mlmodel.ModelRegistryState
+import co.agrovision.core.model.mlmodel.ModelUpdateDecision
+import co.agrovision.core.model.mlmodel.ModelUpdateFailure
 import co.agrovision.core.model.port.AccountRepository
+import co.agrovision.core.model.port.ModelRegistryRepository
 import co.agrovision.core.model.port.SettingsRepository
 import co.agrovision.core.model.settings.OutdoorMode
 import co.agrovision.core.model.settings.SyncNetworkPolicy
 import co.agrovision.core.model.settings.UserPreferences
+import co.agrovision.core.model.usecase.ActivateModelUseCase
+import co.agrovision.core.model.usecase.CheckModelUpdateUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -27,6 +33,22 @@ data class SettingsUiState(
     val trainingConsent: Boolean = false,
     /** La última vez que se cambió el consentimiento no llegó al servidor. */
     val consentNotSynced: Boolean = false,
+    val model: ModelStatusUi = ModelStatusUi(),
+)
+
+/** Qué está haciendo la búsqueda manual de actualizaciones del modelo. */
+enum class ModelCheckPhase { IDLE, CHECKING, UP_TO_DATE, UPDATED, REQUIRES_APP_UPDATE, FAILED }
+
+@Immutable
+data class ModelStatusUi(
+    /** Versión del modelo activo; nula si la app aún usa el de fábrica. */
+    val activeVersion: String? = null,
+    val installedAtEpochMillis: Long = 0L,
+    val lastCheckEpochMillis: Long = 0L,
+    val lastFailure: ModelUpdateFailure? = null,
+    val phase: ModelCheckPhase = ModelCheckPhase.IDLE,
+    val updatedToVersion: String? = null,
+    val requiredAppVersion: String? = null,
 )
 
 /**
@@ -38,19 +60,31 @@ data class SettingsUiState(
 class SettingsViewModel @Inject constructor(
     private val settings: SettingsRepository,
     private val account: AccountRepository,
+    private val registry: ModelRegistryRepository,
+    private val checkModelUpdate: CheckModelUpdateUseCase,
+    private val activateModel: ActivateModelUseCase,
 ) : ViewModel() {
 
     private val consentNotSynced = MutableStateFlow(false)
+    private val modelCheck = MutableStateFlow(ModelStatusUi())
 
     val state: StateFlow<SettingsUiState> = combine(
         settings.observe(),
         account.observe(),
         consentNotSynced,
-    ) { preferences, current, notSynced ->
+        registry.observeState(),
+        modelCheck,
+    ) { preferences, current, notSynced, registryState, check ->
         SettingsUiState(
             preferences = preferences,
             trainingConsent = current.trainingConsent,
             consentNotSynced = notSynced,
+            model = check.copy(
+                activeVersion = registryState.active?.version,
+                installedAtEpochMillis = registryState.active?.installedAtEpochMillis ?: 0L,
+                lastCheckEpochMillis = registryState.lastCheckEpochMillis,
+                lastFailure = registryState.lastFailure,
+            ),
         )
     }.stateIn(
         scope = viewModelScope,
@@ -76,6 +110,33 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             val result = account.setTrainingConsent(granted)
             consentNotSynced.update { result is AgroResult.Failure }
+        }
+    }
+
+    /** Búsqueda manual: salta el límite de 24 h y, si hay versión nueva, la instala. */
+    fun checkModelNow() {
+        if (modelCheck.value.phase == ModelCheckPhase.CHECKING) return
+        modelCheck.value = ModelStatusUi(phase = ModelCheckPhase.CHECKING)
+        viewModelScope.launch {
+            val next = when (val result = checkModelUpdate(force = true)) {
+                is AgroResult.Failure -> ModelStatusUi(phase = ModelCheckPhase.FAILED)
+                is AgroResult.Success -> when (val decision = result.value) {
+                    ModelUpdateDecision.UpToDate -> ModelStatusUi(phase = ModelCheckPhase.UP_TO_DATE)
+                    is ModelUpdateDecision.RequiresAppUpdate -> ModelStatusUi(
+                        phase = ModelCheckPhase.REQUIRES_APP_UPDATE,
+                        requiredAppVersion = decision.minAppVersion,
+                    )
+                    is ModelUpdateDecision.KillSwitchTriggered -> ModelStatusUi(phase = ModelCheckPhase.UP_TO_DATE)
+                    is ModelUpdateDecision.Available -> when (activateModel(decision.manifest)) {
+                        is AgroResult.Success -> ModelStatusUi(
+                            phase = ModelCheckPhase.UPDATED,
+                            updatedToVersion = decision.manifest.version,
+                        )
+                        is AgroResult.Failure -> ModelStatusUi(phase = ModelCheckPhase.FAILED)
+                    }
+                }
+            }
+            modelCheck.value = next
         }
     }
 
