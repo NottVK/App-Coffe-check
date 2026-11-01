@@ -97,7 +97,12 @@ class HistoryViewModel @Inject constructor(
 
 private fun Capture.toItem(names: Map<String, String>): HistoryItem {
     // La corrección del productor manda sobre lo que dijo el modelo.
-    val pestId = (userCorrectionClassId ?: predictedClassId)?.takeIf { it in names }
+    // El modelo habla en classId (p. ej. «Leaf rust») y el catálogo en pestId
+    // («Enfermedad_Roya»): se traduce con el `top` guardado antes de buscar la ficha.
+    val classId = userCorrectionClassId ?: predictedClassId
+    val pestId = classId
+        ?.let { id -> top.firstOrNull { it.classId == id }?.pestId ?: id }
+        ?.takeIf { it in names }
     return HistoryItem(
         id = id,
         thumbnailPath = thumbnailPath,
