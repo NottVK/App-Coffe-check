@@ -39,11 +39,29 @@ class CheckModelUpdateUseCase @Inject constructor(
             return AgroResult.success(ModelUpdateDecision.UpToDate)
         }
 
+        // Si las últimas actualizaciones fallaron (firma, integridad, prueba de humo), repetirlas cada
+        // 15 minutos redescargaría ~5 MB una y otra vez con datos del productor. El espera crece
+        // al doble por cada fallo seguido, hasta un día, y vale también cuando no hay modelo.
+        if (state.consecutiveFailures > 0 && elapsed < failureCooldownMillis(state.consecutiveFailures)) {
+            return AgroResult.success(ModelUpdateDecision.UpToDate)
+        }
+
         return registry.fetchManifest().map { manifest ->
             registry.recordCheck(now)
             // Sin modelo publicado la app sigue con el que trae de fábrica
             if (manifest == null) ModelUpdateDecision.UpToDate else decide(manifest, state.active?.version)
         }
+    }
+
+    private fun failureCooldownMillis(failures: Int): Long {
+        val base = AgroConstants.Model.UPDATE_CHECK_INTERVAL.inWholeMilliseconds
+        val grown = base shl failures.coerceAtMost(MAX_FAILURE_DOUBLINGS)
+        return minOf(grown, MAX_FAILURE_COOLDOWN_MILLIS)
+    }
+
+    private companion object {
+        const val MAX_FAILURE_DOUBLINGS = 7
+        const val MAX_FAILURE_COOLDOWN_MILLIS = 24L * 60 * 60 * 1000
     }
 
     private fun decide(manifest: ModelManifest, activeVersion: String?): ModelUpdateDecision {

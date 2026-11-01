@@ -79,8 +79,9 @@ class ReviewRequestRepositoryImpl @Inject constructor(
         error: String?,
         nextAttemptAtEpochMillis: Long?,
         status: ReviewStatus?,
+        countsAsAttempt: Boolean,
     ) = withContext(io) {
-        dao.updateSyncState(id, state.name, serverId, error, nextAttemptAtEpochMillis, status?.name)
+        dao.updateSyncState(id, state.name, serverId, error, nextAttemptAtEpochMillis, status?.name, countsAsAttempt)
     }
 
     /**

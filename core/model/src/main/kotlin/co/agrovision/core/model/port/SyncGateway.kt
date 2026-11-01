@@ -4,7 +4,6 @@ import co.agrovision.core.common.AgroResult
 import co.agrovision.core.model.DomainError
 import co.agrovision.core.model.capture.Capture
 import co.agrovision.core.model.mlmodel.ModelManifest
-import co.agrovision.core.model.pest.PestTaxon
 import co.agrovision.core.model.review.RemoteReviewStatus
 import co.agrovision.core.model.review.ReviewRequest
 
@@ -37,12 +36,6 @@ interface SyncGateway {
         localPath: String,
     ): AgroResult<Unit, DomainError>
 
-    /** Sincronización incremental del catálogo con ETag (§10.3). */
-    suspend fun fetchCatalogDelta(
-        sinceEpochMillis: Long?,
-        etag: String?,
-    ): AgroResult<CatalogDelta, DomainError>
-
     /**
      * Estado en el servidor de las solicitudes del productor, con la resolución
      * del agrónomo cuando la hay. Devuelve estados y no `ReviewRequest` completas
@@ -52,8 +45,6 @@ interface SyncGateway {
     suspend fun fetchMyResolutions(
         sinceEpochMillis: Long?,
     ): AgroResult<List<RemoteReviewStatus>, DomainError>
-
-    suspend fun registerPushToken(token: String): AgroResult<Unit, DomainError>
 
     /**
      * Telemetría de campo anónima (`public/v1/telemetry/field-metrics`): sin JWT y sin datos
@@ -100,14 +91,4 @@ enum class UploadStatus {
     DUPLICATE,
 
     REJECTED,
-}
-
-sealed interface CatalogDelta {
-    data object NotModified : CatalogDelta
-    data class Changed(
-        val upserted: List<PestTaxon>,
-        val deletedIds: List<String>,
-        val etag: String?,
-        val serverTimeEpochMillis: Long,
-    ) : CatalogDelta
 }

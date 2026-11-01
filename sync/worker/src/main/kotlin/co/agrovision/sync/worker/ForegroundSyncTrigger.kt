@@ -16,7 +16,9 @@ import co.agrovision.core.model.usecase.RollBackModelUseCase
 import co.agrovision.core.model.usecase.CheckModelUpdateUseCase
 import co.agrovision.core.model.usecase.SyncPendingUseCase
 import co.agrovision.core.model.usecase.SyncTrigger
+import android.util.Log
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
@@ -65,7 +67,13 @@ class ForegroundSyncTrigger @Inject constructor(
     // Scope propio del proceso, no del ViewModel: la sincronización tiene que
     // sobrevivir a que el productor navegue entre pantallas. `SupervisorJob` para
     // que un fallo no cancele las sincronizaciones siguientes.
-    private val scope = CoroutineScope(SupervisorJob() + io)
+    // Sin manejador, cualquier excepción que no sea de red (un manifiesto mal formado, disco lleno)
+    // llegaría al manejador por defecto y cerraría el proceso en cada apertura de la app.
+    private val scope = CoroutineScope(
+        SupervisorJob() + io + CoroutineExceptionHandler { _, error ->
+            Log.e("ForegroundSync", "Fallo no controlado en la sincronización", error)
+        },
+    )
 
     fun attach() {
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)

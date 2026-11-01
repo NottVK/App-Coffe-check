@@ -13,7 +13,6 @@ dependencies {
 
     implementation(libs.androidx.core.ktx)
     // Se usa para BORRAR los metadatos EXIF, no para leerlos (§12.2).
-    implementation(libs.androidx.exifinterface)
 
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)

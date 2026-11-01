@@ -10,6 +10,7 @@ import co.agrovision.core.datastore.DeviceIdentityStore
 import co.agrovision.ml.registry.ModelSlotLayout
 import co.agrovision.sync.worker.ForegroundSyncTrigger
 import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -26,7 +27,11 @@ class AgroVisionApplication : Application(), Configuration.Provider {
     @Inject lateinit var identity: DeviceIdentityStore
     @Inject lateinit var slots: ModelSlotLayout
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, error ->
+            Log.e("AgroVision", "Fallo no controlado en el arranque", error)
+        },
+    )
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()

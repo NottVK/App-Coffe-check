@@ -106,11 +106,6 @@ class SyncScheduler @Inject constructor(
         workManager.enqueueUniqueWork(WORK_MODEL, ExistingWorkPolicy.KEEP, request)
     }
 
-    fun cancelAll() {
-        workManager.cancelUniqueWork(WORK_SYNC)
-        workManager.cancelUniqueWork(WORK_MODEL)
-    }
-
     private companion object {
         const val WORK_SYNC = "agrovision.sync"
         const val WORK_MODEL = "agrovision.model-check"

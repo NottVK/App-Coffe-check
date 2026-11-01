@@ -298,11 +298,50 @@ class SyncPendingUseCaseTest {
         coEvery { captures.nextBatchToUpload(any(), any()) } returns listOf(capture(exact))
         coEvery { reviews.nextBatchToUpload(any(), any()) } returns emptyList()
         coEvery { settings.current() } returns
-            UserPreferences.DEFAULT.copy(trainingConsent = true)
+            UserPreferences.DEFAULT.copy(trainingConsent = true, locationShareConsentAtEpochMillis = 1L)
 
         runSync()
 
         assertEquals(exact, gateway.sentCaptures.single().location)
+    }
+
+    @Test
+    fun `sin consentimiento de ubicacion la captura sale con coordenada aproximada`() = runTest {
+        val exact = GeoPoint(2.92734, -75.28197, 6f, altitudeMeters = 1_432.5, isMock = true)
+        coEvery { captures.nextBatchToUpload(any(), any()) } returns listOf(capture(exact))
+        coEvery { reviews.nextBatchToUpload(any(), any()) } returns emptyList()
+        coEvery { settings.current() } returns UserPreferences.DEFAULT.copy(trainingConsent = true)
+
+        runSync()
+
+        val sent = gateway.sentCaptures.single().location!!
+        assertEquals(false, sent.isExact)
+        assertEquals(2.93, sent.latitude, 1e-9)
+        assertEquals(-75.28, sent.longitude, 1e-9)
+        assertEquals(null, sent.altitudeMeters)
+        assertEquals(null, sent.accuracyMeters)
+    }
+
+    @Test
+    fun `un 429 devuelve las capturas a la cola sin gastar reintentos y corta la sincronizacion`() = runTest {
+        coEvery { captures.nextBatchToUpload(any(), any()) } returns listOf(capture(null))
+        coEvery { reviews.nextBatchToUpload(any(), any()) } returns listOf(review)
+        coEvery { settings.current() } returns UserPreferences.DEFAULT.copy(trainingConsent = true)
+        gateway.captureUploadError = DomainError.RateLimited(retryAfterMillis = 30_000L)
+
+        val summary = runSync()
+
+        assertEquals(SkipReason.RATE_LIMITED, summary.skipReason)
+        coVerify {
+            captures.updateSyncState(
+                id = "cap-1",
+                state = SyncState.PENDING,
+                error = any(),
+                nextAttemptAtEpochMillis = NOW + 30_000L,
+                countsAsAttempt = false,
+            )
+        }
+        assertEquals(0, gateway.reviewUploadCalls)
     }
 
     @Test
@@ -449,8 +488,6 @@ class SyncPendingUseCaseTest {
             return statusesError?.let { AgroResult.failure(it) } ?: AgroResult.success(statuses)
         }
 
-        override suspend fun fetchCatalogDelta(sinceEpochMillis: Long?, etag: String?) = unused()
-        override suspend fun registerPushToken(token: String) = unused()
         override suspend fun postFieldMetrics(metrics: Map<String, String>) = unused()
         override suspend fun fetchModelManifest(appVersion: String, deviceId: String) = unused()
 

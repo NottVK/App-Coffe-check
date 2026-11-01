@@ -17,8 +17,6 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <!-- Ubicación: opcional, se solicita en contexto y nunca al arrancar
          (§12.2). El productor puede además elegir precisión de vereda. -->
@@ -97,10 +95,6 @@
           `foregroundServiceType="dataSync"` es obligatorio desde API 34 y hay que
           justificarlo en el formulario de Play (PRESERVE.md §4).
         -->
-        <service
-            android:name="co.agrovision.sync.worker.SyncForegroundService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
 
         <!--
           FileProvider. La autoridad se conserva EXACTA: `${applicationId}` se

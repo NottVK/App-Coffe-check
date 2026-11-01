@@ -114,6 +114,11 @@ sealed interface DomainError {
         override val message = MessageKey.ERROR_NO_CONNECTION
     }
 
+    /** HTTP 429 o 503: el servidor pide esperar. No es culpa de las filas: no gasta reintentos. */
+    data class RateLimited(val retryAfterMillis: Long) : DomainError {
+        override val message = MessageKey.ERROR_NO_CONNECTION
+    }
+
     data class RemoteFailure(val httpCode: Int, val detail: String?) : DomainError {
         override val message = MessageKey.ERROR_UNEXPECTED
     }

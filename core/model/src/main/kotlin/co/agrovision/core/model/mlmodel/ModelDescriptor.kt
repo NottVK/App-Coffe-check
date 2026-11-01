@@ -26,6 +26,8 @@ data class ModelRegistryState(
     val standby: InstalledModel?,
     val lastCheckEpochMillis: Long,
     val lastFailure: ModelUpdateFailure?,
+    /** Actualizaciones fallidas seguidas: alimenta el backoff para no redescargar el mismo modelo roto. */
+    val consecutiveFailures: Int = 0,
 ) {
     /** La reversión no requiere descarga: el modelo previo sigue en disco
      *  (§8.4). Por eso el interruptor de emergencia surte efecto en segundos. */

@@ -82,7 +82,7 @@ interface ReviewDao {
             server_id = COALESCE(:serverId, server_id),
             last_sync_error = :error,
             next_attempt_at = :nextAttemptAt,
-            sync_attempts = CASE WHEN :state = 'PENDING' OR :state = 'FAILED'
+            sync_attempts = CASE WHEN :countsAsAttempt AND (:state = 'PENDING' OR :state = 'FAILED')
                                  THEN sync_attempts + 1 ELSE sync_attempts END,
             status = COALESCE(:status, status)
         WHERE id = :id
@@ -95,6 +95,7 @@ interface ReviewDao {
         error: String?,
         nextAttemptAt: Long?,
         status: String?,
+        countsAsAttempt: Boolean = true,
     )
 
     /**

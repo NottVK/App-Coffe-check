@@ -123,6 +123,8 @@ interface ReviewRequestRepository {
         error: String? = null,
         nextAttemptAtEpochMillis: Long? = null,
         status: ReviewStatus? = null,
+        /** `false` devuelve la fila a la cola sin gastar un reintento (límite de ritmo del servidor). */
+        countsAsAttempt: Boolean = true,
     )
 
     /**

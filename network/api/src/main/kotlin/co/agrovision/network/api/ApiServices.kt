@@ -1,7 +1,6 @@
 package co.agrovision.network.api
 
 import co.agrovision.network.api.dto.CaptureBatchRequestDto
-import co.agrovision.network.api.dto.CatalogDeltaDto
 import co.agrovision.network.api.dto.ConsentRevocationDto
 import co.agrovision.network.api.dto.ModelManifestDto
 import co.agrovision.network.api.dto.OtpRequestDto
@@ -9,7 +8,6 @@ import co.agrovision.network.api.dto.OtpVerificationDto
 import co.agrovision.network.api.dto.OtpVerificationResponseDto
 import co.agrovision.network.api.dto.ProducerProfileRequestDto
 import co.agrovision.network.api.dto.ProducerProfileResponseDto
-import co.agrovision.network.api.dto.PushTokenDto
 import co.agrovision.network.api.dto.ReviewRequestBatchDto
 import co.agrovision.network.api.dto.ReviewResolutionDto
 import co.agrovision.network.api.dto.UploadBatchResponseDto
@@ -51,15 +49,6 @@ interface PublicApiService {
         @Query("deviceId") deviceId: String,
     ): Response<ModelManifestDto>
 
-    /** Sincronización incremental con ETag: un `304` cuesta una cabecera en vez
-     *  de una descarga completa, que sobre datos prepago decide si el catálogo se
-     *  actualiza o no. */
-    @GET("public/v1/pests/sync")
-    suspend fun syncCatalog(
-        @Query("since") sinceIso: String?,
-        @Header("If-None-Match") etag: String?,
-    ): Response<CatalogDeltaDto>
-
     @POST("public/v1/telemetry/field-metrics")
     suspend fun postFieldMetrics(@Body body: Map<String, String>): Response<Unit>
 }
@@ -93,9 +82,6 @@ interface AgroVisionApiService {
     suspend fun myResolutions(
         @Query("since") sinceEpochMillis: Long?,
     ): Response<List<ReviewResolutionDto>>
-
-    @POST("v1/devices/push-token")
-    suspend fun registerPushToken(@Body body: PushTokenDto): Response<Unit>
 
     // ── Identidad ──
     // Sin el prefijo `v1/`: así los expone el backend.

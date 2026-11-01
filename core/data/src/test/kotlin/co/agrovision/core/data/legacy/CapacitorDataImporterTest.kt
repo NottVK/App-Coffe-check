@@ -311,9 +311,13 @@ private class FakeCaptureDao : CaptureDao {
         serverId: String?,
         error: String?,
         nextAttemptAt: Long?,
+        countsAsAttempt: Boolean,
     ) = Unit
+    override suspend fun requeueStuckUploads() = 0
+    override suspend fun skipUnsent() = 0
     override suspend fun confirm(id: String) = 0
     override suspend fun correct(id: String, classId: String) = 0
     override suspend fun findPurgeable(cutoffEpochMillis: Long) = emptyList<CaptureEntity>()
     override suspend fun deleteByIds(ids: List<String>) = 0
+    override suspend fun pathsUsedByReviews(paths: List<String>) = emptyList<String>()
 }

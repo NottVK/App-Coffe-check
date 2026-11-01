@@ -198,6 +198,7 @@ class FakeReviewRepository : ReviewRequestRepository {
         error: String?,
         nextAttemptAtEpochMillis: Long?,
         status: ReviewStatus?,
+        countsAsAttempt: Boolean,
     ) = Unit
 
     override suspend fun mergeRemoteStatuses(statuses: List<RemoteReviewStatus>) = 0

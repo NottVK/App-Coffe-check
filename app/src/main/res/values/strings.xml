@@ -21,8 +21,6 @@
     <string name="home_analizar_ayuda">Toma la foto y te digo qué tiene</string>
     <string name="home_analizar_descripcion">Analizar una planta con la cámara</string>
     <string name="home_sin_senal">Funciona sin señal</string>
-    <string name="home_catalogo">Afecciones</string>
-    <string name="home_catalogo_detalle">%1$d fichas para consultar</string>
     <string name="home_catalogo_unidad">fichas de plagas</string>
     <string name="home_plagas_comunes">Afecciones del cultivo</string>
     <string name="home_ver_todas">Ver todas</string>
@@ -41,7 +39,7 @@
     <string name="ajustes_red_preguntar">Preguntarme</string>
     <string name="ajustes_ubicacion">Ubicación</string>
     <string name="ajustes_ubicacion_usar">Guardar dónde tomo la foto</string>
-    <string name="ajustes_ubicacion_ayuda">Ayuda al agrónomo a conocer la zona. Puedes apagarlo cuando quieras.</string>
+    <string name="ajustes_ubicacion_ayuda">Ayuda al agrónomo a conocer la zona. Con las fotos solo se envía una ubicación aproximada (unos 1 000 m); la exacta únicamente si autorizas compartirla al pedir una revisión. Puedes apagarlo cuando quieras.</string>
     <string name="ajustes_ubicacion_solicitudes">Compartir mi ubicación exacta al pedir una revisión</string>
     <string name="ajustes_ubicacion_solicitudes_ayuda">La ven el administrador y el agrónomo asignado, solo para atender tu solicitud. Si lo apagas, te lo volveremos a preguntar al enviar otra.</string>
     <string name="ajustes_pantalla">Pantalla</string>

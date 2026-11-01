@@ -39,10 +39,6 @@ object AgroConstants {
         const val INPUT_SIZE_PX = 224
         const val INPUT_CHANNELS = 3
 
-        /** Dimensión del embedding de la penúltima capa. El valor real llega en
-         *  `labels.json`; este es el respaldo si el metadato falta. */
-        const val DEFAULT_EMBEDDING_DIM = 256
-
         /**
          * Entre comprobaciones de OTA. La consulta del manifiesto pesa menos de 1 KB: lo que gasta
          * datos es la descarga del modelo, y esa solo ocurre cuando hay una versión nueva. Por eso
@@ -54,9 +50,6 @@ object AgroConstants {
          *  (Snapdragon 680, 4 GB). Por encima, el productor percibe la app como
          *  rota (§3.2 RNF). */
         val LATENCY_BUDGET: Duration = 900.milliseconds
-
-        /** Tiempo máximo tolerable para el precalentamiento del intérprete. */
-        val WARMUP_TIMEOUT: Duration = 10.seconds
     }
 
     object Sync {
@@ -73,11 +66,6 @@ object AgroConstants {
         val INITIAL_BACKOFF: Duration = 30.seconds
         val MAX_BACKOFF: Duration = 6.hours
 
-        /** Umbral a partir del cual se ofrece el disparador terciario
-         *  (Foreground Service) en lugar de subir en primer plano (§9.4). */
-        const val FOREGROUND_SERVICE_THRESHOLD_ITEMS = 25
-
-        val WORKER_PERIOD: Duration = 6.hours
     }
 
     object Review {
@@ -114,6 +102,5 @@ object AgroConstants {
         const val PRIMARY_ACTION_DP = 96
 
         const val MOTION_FAST_MS = 120
-        const val MOTION_ORCHESTRATED_MS = 220
     }
 }

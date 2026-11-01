@@ -54,7 +54,9 @@ class ModelSlotStore @Inject constructor(
             ModelSlotPointer(
                 activeSlot = slot,
                 activeVersion = version,
-                previousSlot = previous.activeSlot.takeIf { it != slot },
+                // Solo hay a qué volver si la ranura anterior tuvo un modelo instalado. En la primera
+                // activación la «A» por defecto está vacía: apuntarle dejaría la app sin reconocedor.
+                previousSlot = previous.activeSlot.takeIf { it != slot && previous.activeVersion != null },
                 previousVersion = previous.activeVersion,
                 activatedAtEpochMillis = nowEpochMillis,
                 lastCheckEpochMillis = previous.lastCheckEpochMillis,
@@ -72,6 +74,9 @@ class ModelSlotStore @Inject constructor(
         var reverted = false
         store.updateData { previous ->
             val target = previous.previousSlot ?: return@updateData previous
+            // Un puntero anterior sin versión es una ranura vacía (punteros guardados antes de esta
+            // corrección): revertir a ella dejaría la app sin modelo.
+            if (previous.previousVersion == null) return@updateData previous
             reverted = true
             ModelSlotPointer(
                 activeSlot = target,

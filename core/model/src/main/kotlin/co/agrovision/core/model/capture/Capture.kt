@@ -96,3 +96,18 @@ data class GeoPoint(
     val isMock: Boolean = false,
     val isExact: Boolean = true,
 )
+
+/**
+ * Versión aproximada de la coordenada: redondeada a unos 1,1 km (dos decimales), sin altitud ni
+ * precisión del fix y marcada como no exacta. Es lo único que sale del teléfono con una captura si el
+ * productor no autorizó compartir su ubicación exacta (§12.2): la finca no se puede ubicar con ella.
+ */
+fun GeoPoint.coarsened(): GeoPoint = copy(
+    latitude = kotlin.math.round(latitude * COARSE_FACTOR) / COARSE_FACTOR,
+    longitude = kotlin.math.round(longitude * COARSE_FACTOR) / COARSE_FACTOR,
+    accuracyMeters = null,
+    altitudeMeters = null,
+    isExact = false,
+)
+
+private const val COARSE_FACTOR = 100.0

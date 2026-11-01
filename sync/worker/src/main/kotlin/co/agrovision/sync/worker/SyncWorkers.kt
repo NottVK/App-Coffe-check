@@ -112,13 +112,16 @@ class ModelUpdateWorker @AssistedInject constructor(
                     is AgroResult.Success -> Result.success()
                     // La ranura activa quedó intacta: el productor sigue pudiendo
                     // escanear con el modelo anterior mientras esto se reintenta.
-                    is AgroResult.Failure -> Result.retry()
+                    // Con tope: un modelo que falla siempre no debe redescargarse sin fin
+                    is AgroResult.Failure ->
+                        if (runAttemptCount >= MAX_ACTIVATION_ATTEMPTS) Result.failure() else Result.retry()
                 }
             }
         }
     }
 
     private companion object {
+        const val MAX_ACTIVATION_ATTEMPTS = 3
         const val TAG = "AgroVision.ModelWorker"
     }
 }

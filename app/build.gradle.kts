@@ -229,8 +229,39 @@ val verifyModelSigningKey = tasks.register("verifyModelSigningKey") {
     }
 }
 
+// Mismo criterio para el anclaje de certificado (§15.4): con pines `TODO_…` el código los descarta en
+// silencio y la app queda con el validador por defecto, sin ningún síntoma. Se exigen al menos dos
+// (principal y respaldo) para que rotar el certificado no deje la flota sin conexión.
+val verifyCertificatePins = tasks.register("verifyCertificatePins") {
+    group = "verification"
+    description = "Comprueba que los pines SPKI del certificado sean reales (principal y respaldo)."
+
+    val pines = providers.gradleProperty("agrovision.pinning.pins")
+
+    doLast {
+        val lista = pines.get().split(',').map(String::trim).filter { it.isNotEmpty() }
+
+        if (lista.any { it.startsWith("TODO") } || lista.size < 2) {
+            throw GradleException(
+                """
+                |Los pines de certificado (agrovision.pinning.pins) no están configurados.
+                |
+                |Hacen falta al menos DOS pines SPKI SHA-256 reales: el del certificado actual
+                |y uno de respaldo. Con los marcadores TODO la app no ancla nada.
+                |
+                |Para calcular el pin del certificado en uso:
+                |
+                |    openssl s_client -connect agrovision.sbs:443 -servername agrovision.sbs </dev/null 2>/dev/null \\
+                |      | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der \\
+                |      | openssl dgst -sha256 -binary | openssl enc -base64
+                """.trimMargin()
+            )
+        }
+    }
+}
+
 tasks.matching { it.name == "bundleRelease" || it.name == "assembleRelease" }
-    .configureEach { dependsOn(verifyModelSigningKey) }
+    .configureEach { dependsOn(verifyModelSigningKey, verifyCertificatePins) }
 
 // Firebase Cloud Messaging solo si hay configuración. Mantiene el proyecto
 // compilable para quien clona sin credenciales, que es el caso de cualquiera

@@ -57,12 +57,12 @@ class ModelRegistryRepositoryImpl @Inject constructor(
 ) : ModelRegistryRepository, ActiveModelProvider {
 
     override fun observeState(): Flow<ModelRegistryState> = slots.pointer.map { pointer ->
-        buildState(pointer.activeSlot, pointer.lastCheckEpochMillis)
+        buildState(pointer.activeSlot, pointer.lastCheckEpochMillis, pointer.consecutiveFailures)
     }
 
     override suspend fun currentState(): ModelRegistryState = withContext(io) {
         val pointer = slots.current()
-        buildState(pointer.activeSlot, pointer.lastCheckEpochMillis)
+        buildState(pointer.activeSlot, pointer.lastCheckEpochMillis, pointer.consecutiveFailures)
     }
 
     override suspend fun fetchManifest(): AgroResult<ModelManifest?, DomainError> = withContext(io) {
@@ -152,12 +152,13 @@ class ModelRegistryRepositoryImpl @Inject constructor(
         )
     }
 
-    private suspend fun buildState(active: ModelSlot, lastCheck: Long) = ModelRegistryState(
+    private suspend fun buildState(active: ModelSlot, lastCheck: Long, failures: Int) = ModelRegistryState(
         activeSlot = active,
         active = installer.readInstalled(active),
         standby = installer.readInstalled(active.other),
         lastCheckEpochMillis = lastCheck,
         lastFailure = null,
+        consecutiveFailures = failures,
     )
 
     private companion object {

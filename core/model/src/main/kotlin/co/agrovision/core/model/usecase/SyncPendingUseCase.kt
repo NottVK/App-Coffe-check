@@ -4,6 +4,7 @@ import co.agrovision.core.common.AgroConstants
 import co.agrovision.core.common.AgroResult
 import co.agrovision.core.model.DomainError
 import co.agrovision.core.model.capture.SyncState
+import co.agrovision.core.model.capture.coarsened
 import co.agrovision.core.model.identity.UploadGate
 import co.agrovision.core.model.identity.withFarmContext
 import co.agrovision.core.model.port.AccountRepository
@@ -100,7 +101,12 @@ class SyncPendingUseCase @Inject constructor(
         val captureBatch = captures.nextBatchToUpload(AgroConstants.Sync.BATCH_SIZE, now)
         if (captureBatch.isNotEmpty()) {
             captureBatch.forEach { captures.updateSyncState(it.id, SyncState.UPLOADING) }
-            when (val result = gateway.uploadCaptures(captureBatch)) {
+            // La coordenada exacta de una captura solo sale con el consentimiento específico de ubicación
+            // (el mismo que protege las solicitudes de revisión). Sin él viaja aproximada, ~1 km.
+            val shareExact = preferences.locationShareConsentAtEpochMillis != null
+            val outgoingCaptures = if (shareExact) captureBatch
+            else captureBatch.map { capture -> capture.copy(location = capture.location?.coarsened()) }
+            when (val result = gateway.uploadCaptures(outgoingCaptures)) {
                 is AgroResult.Failure -> {
                     if (result.error == DomainError.NotSignedIn) {
                         // De vuelta a la cola tal como estaban antes de marcarlas
@@ -115,6 +121,21 @@ class SyncPendingUseCase @Inject constructor(
                             )
                         }
                         return signInRequired(trigger, uploaded, failed)
+                    }
+                    val limited = result.error as? DomainError.RateLimited
+                    if (limited != null) {
+                        // El servidor pidió esperar: las filas vuelven a la cola SIN gastar el intento
+                        // y la sincronización se detiene hasta que pase el plazo.
+                        captureBatch.forEach { capture ->
+                            captures.updateSyncState(
+                                id = capture.id,
+                                state = SyncState.PENDING,
+                                error = RATE_LIMITED_MESSAGE,
+                                nextAttemptAtEpochMillis = now + limited.retryAfterMillis,
+                                countsAsAttempt = false,
+                            )
+                        }
+                        return rateLimited(trigger, uploaded, failed)
                     }
                     captureBatch.forEach { capture ->
                         failed++
@@ -152,6 +173,19 @@ class SyncPendingUseCase @Inject constructor(
                     }
                     // 422 ubicacion_exacta_requerida: no es un fallo transitorio. Se
                     // deja en cola sin gastar reintentos hasta que haya ubicación.
+                    val limited = result.error as? DomainError.RateLimited
+                    if (limited != null) {
+                        reviewBatch.forEach { review ->
+                            reviews.updateSyncState(
+                                id = review.id,
+                                state = SyncState.PENDING,
+                                error = RATE_LIMITED_MESSAGE,
+                                nextAttemptAtEpochMillis = now + limited.retryAfterMillis,
+                                countsAsAttempt = false,
+                            )
+                        }
+                        return rateLimited(trigger, uploaded, failed)
+                    }
                     if (result.error == DomainError.ExactLocationRequired) {
                         reviewBatch.forEach { holdForExactLocation(it, now) }
                     } else reviewBatch.forEach { review ->
@@ -211,6 +245,20 @@ class SyncPendingUseCase @Inject constructor(
             )
         )
     }
+
+    /** El servidor pidió esperar (429/503): se corta la sincronización sin gastar reintentos. */
+    private fun rateLimited(
+        trigger: SyncTrigger,
+        uploaded: Int,
+        failed: Int,
+    ): AgroResult<SyncSummary, DomainError> = AgroResult.success(
+        SyncSummary(
+            trigger = trigger,
+            uploaded = uploaded,
+            failed = failed,
+            skipReason = SkipReason.RATE_LIMITED,
+        )
+    )
 
     private suspend fun reconcileCaptures(
         batch: List<co.agrovision.core.model.capture.Capture>,
@@ -433,6 +481,7 @@ class SyncPendingUseCase @Inject constructor(
 
     private companion object {
         const val MAX_BACKOFF_EXPONENT = 10
+        const val RATE_LIMITED_MESSAGE = "El servidor pidió esperar; se reintenta más tarde."
         const val EXACT_LOCATION_REQUIRED_CODE = "ubicacion_exacta_requerida"
         const val EXACT_LOCATION_HOLD_MESSAGE =
             "Falta la ubicación exacta de la foto. Toma la foto de nuevo en el lote para enviarla."
@@ -477,4 +526,7 @@ enum class SkipReason {
      *  entrar con OTP. */
     SIGN_IN_REQUIRED,
     NOTHING_PENDING,
+
+    /** El servidor respondió 429/503. Las filas esperan sin gastar reintentos. */
+    RATE_LIMITED,
 }

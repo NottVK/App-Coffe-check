@@ -128,56 +128,6 @@ data class ImageUploadDto(
 )
 
 @Serializable
-data class CatalogDeltaDto(
-    val upserted: List<PestDto> = emptyList(),
-    val deletedIds: List<String> = emptyList(),
-    val etag: String? = null,
-    val serverTime: Long = 0L,
-)
-
-@Serializable
-data class PestDto(
-    val id: String,
-    val scientificName: String,
-    val commonName: String,
-    val localSynonyms: List<String> = emptyList(),
-    val crop: String,
-    val affectedOrgans: List<String> = emptyList(),
-    val description: String = "",
-    val recommendations: List<RecommendationDto> = emptyList(),
-    val images: List<String> = emptyList(),
-    val version: Int = 1,
-    /** «Enfermedad», «Plaga», «Deficiencia»… El servidor manda el texto; el
-     *  cliente lo normaliza con `PestKind.parse`. */
-    val kind: String? = null,
-    /** Fuente bibliográfica de la ficha. */
-    val reference: String? = null,
-    /**
-     * Aval profesional (§13.6). Si llega nulo, la ficha se muestra **sin** la
-     * sección de manejo: distribuir dosis e ingredientes activos sin agrónomo con
-     * tarjeta vigente detrás es exposición ante el ICA, no un detalle de formato.
-     */
-    val approval: ApprovalDto? = null,
-)
-
-@Serializable
-data class RecommendationDto(
-    val kind: String,
-    val summary: String,
-    val detail: String = "",
-    val activeIngredient: String? = null,
-    val dosage: String? = null,
-    @SerialName("preHarvestIntervalDays") val preHarvestIntervalDays: Int? = null,
-)
-
-@Serializable
-data class ApprovalDto(
-    val agronomistName: String,
-    val licenseNumber: String,
-    val approvedAt: Long,
-)
-
-@Serializable
 data class ReviewResolutionDto(
     val id: String,
     /** `PENDING_UPLOAD` | `SUBMITTED` | `ASSIGNED` | `RESOLVED` | `DISCARDED`. */
@@ -230,9 +180,6 @@ data class ProducerProfileResponseDto(
     val municipio: String? = null,
     val consentimiento: Boolean? = null,
 )
-
-@Serializable
-data class PushTokenDto(val token: String, val deviceId: String)
 
 /** `PATCH productores/me/consentimiento/revocar` exige confirmación explícita. */
 @Serializable

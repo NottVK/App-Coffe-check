@@ -13,8 +13,6 @@ import co.agrovision.core.model.capture.Capture
 import co.agrovision.core.model.capture.GeoPoint
 import co.agrovision.core.model.mlmodel.ModelChannel
 import co.agrovision.core.model.mlmodel.ModelManifest
-import co.agrovision.core.model.pest.PestTaxon
-import co.agrovision.core.model.port.CatalogDelta
 import co.agrovision.core.model.port.SyncGateway
 import co.agrovision.core.model.port.UploadOutcome
 import co.agrovision.core.model.port.UploadStatus
@@ -43,6 +41,7 @@ import okhttp3.RequestBody.Companion.asRequestBody
 import retrofit2.Response
 import java.io.File
 import java.io.IOException
+import kotlinx.serialization.SerializationException
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
@@ -140,36 +139,6 @@ class RetrofitSyncGateway @Inject constructor(
         }
     }
 
-    override suspend fun fetchCatalogDelta(
-        sinceEpochMillis: Long?,
-        etag: String?,
-    ): AgroResult<CatalogDelta, DomainError> = withContext(io) {
-        try {
-            val response = publicApi.syncCatalog(sinceIso = sinceEpochMillis?.toString(), etag = etag)
-
-            // 304 no es un error: es el ETag funcionando y ahorrándole al
-            // productor la descarga completa del catálogo.
-            if (response.code() == NOT_MODIFIED) {
-                return@withContext AgroResult.success(CatalogDelta.NotModified)
-            }
-            val body = response.body()
-                ?: return@withContext AgroResult.failure(
-                    DomainError.RemoteFailure(response.code(), response.message())
-                )
-
-            AgroResult.success(
-                CatalogDelta.Changed(
-                    upserted = body.upserted.map { it.toDomain() },
-                    deletedIds = body.deletedIds,
-                    etag = body.etag,
-                    serverTimeEpochMillis = body.serverTime,
-                )
-            )
-        } catch (error: IOException) {
-            AgroResult.failure(DomainError.NoConnection)
-        }
-    }
-
     override suspend fun fetchMyResolutions(
         sinceEpochMillis: Long?,
     ): AgroResult<List<RemoteReviewStatus>, DomainError> = withContext(io) {
@@ -211,17 +180,13 @@ class RetrofitSyncGateway @Inject constructor(
             }
         } catch (error: IOException) {
             AgroResult.failure(DomainError.NoConnection)
+        } catch (error: SerializationException) {
+            // Un manifiesto con un campo nulo o renombrado no debe cerrar la app en cada apertura
+            AgroResult.failure(DomainError.RemoteFailure(0, "manifiesto con formato inesperado"))
+        } catch (error: IllegalArgumentException) {
+            AgroResult.failure(DomainError.RemoteFailure(0, "manifiesto con formato inesperado"))
         }
     }
-
-    override suspend fun registerPushToken(token: String): AgroResult<Unit, DomainError> =
-        withContext(io) {
-            request {
-                api.registerPushToken(
-                    co.agrovision.network.api.dto.PushTokenDto(token, "")
-                )
-            }.map { }
-        }
 
     override suspend fun postFieldMetrics(
         metrics: Map<String, String>,
@@ -247,6 +212,8 @@ class RetrofitSyncGateway @Inject constructor(
             // JWT vencido o ausente. Se distingue de los demás fallos porque no
             // es culpa del lote: la cola espera sin gastar reintentos.
             response.code() == UNAUTHORIZED -> AgroResult.failure(DomainError.NotSignedIn)
+            response.code() == TOO_MANY_REQUESTS || response.code() == SERVICE_UNAVAILABLE ->
+                AgroResult.failure(DomainError.RateLimited(retryAfterMillis(response.headers()["Retry-After"])))
             response.code() == UNPROCESSABLE &&
                 response.errorBody()?.string()?.contains(EXACT_LOCATION_CODE) == true ->
                 AgroResult.failure(DomainError.ExactLocationRequired)
@@ -261,11 +228,25 @@ class RetrofitSyncGateway @Inject constructor(
         }
     } catch (error: IOException) {
         AgroResult.failure(DomainError.NoConnection)
+    } catch (error: SerializationException) {
+        // Un cuerpo que no encaja con el contrato no debe tumbar la app: es un fallo del servidor
+        AgroResult.failure(DomainError.RemoteFailure(0, "respuesta con formato inesperado"))
+    } catch (error: IllegalArgumentException) {
+        AgroResult.failure(DomainError.RemoteFailure(0, "respuesta con formato inesperado"))
+    }
+
+    /** `Retry-After` en segundos; sin cabecera o ilegible, un minuto. Tope de diez minutos. */
+    private fun retryAfterMillis(header: String?): Long {
+        val seconds = header?.trim()?.toLongOrNull()?.takeIf { it > 0 } ?: DEFAULT_RETRY_AFTER_SECONDS
+        return minOf(seconds, MAX_RETRY_AFTER_SECONDS) * 1_000L
     }
 
     private companion object {
+        const val TOO_MANY_REQUESTS = 429
+        const val SERVICE_UNAVAILABLE = 503
+        const val DEFAULT_RETRY_AFTER_SECONDS = 60L
+        const val MAX_RETRY_AFTER_SECONDS = 600L
         const val JPEG = "image/jpeg"
-        const val NOT_MODIFIED = 304
         const val NO_CONTENT = 204
         const val UNAUTHORIZED = 401
         const val UNPROCESSABLE = 422
@@ -372,42 +353,3 @@ private fun ReviewResolutionDto.toDomain(): RemoteReviewStatus? {
     )
 }
 
-private fun co.agrovision.network.api.dto.PestDto.toDomain(): PestTaxon = PestTaxon(
-    id = id,
-    scientificName = scientificName,
-    commonName = commonName,
-    localSynonyms = localSynonyms,
-    crop = co.agrovision.core.model.pest.CropType.entries
-        .firstOrNull { it.name.equals(crop, ignoreCase = true) }
-        ?: co.agrovision.core.model.pest.CropType.OTRO,
-    affectedOrgans = affectedOrgans.mapNotNull { name ->
-        co.agrovision.core.model.pest.PlantOrgan.entries
-            .firstOrNull { it.name.equals(name, ignoreCase = true) }
-    },
-    description = description,
-    recommendations = recommendations.map {
-        co.agrovision.core.model.pest.ManagementRecommendation(
-            kind = co.agrovision.core.model.pest.ManagementKind.entries
-                .firstOrNull { kind -> kind.name.equals(it.kind, ignoreCase = true) }
-                ?: co.agrovision.core.model.pest.ManagementKind.MONITOREO,
-            summary = it.summary,
-            detail = it.detail,
-            activeIngredient = it.activeIngredient,
-            dosage = it.dosage,
-            preHarvestIntervalDays = it.preHarvestIntervalDays,
-        )
-    },
-    imageRefs = images,
-    version = version,
-    kind = co.agrovision.core.model.pest.PestKind.parse(kind),
-    reference = reference?.takeIf { it.isNotBlank() },
-    // Sin aval, la ficha se muestra sin sección de manejo (§13.6). El servidor
-    // decide; el cliente solo respeta la ausencia.
-    approval = approval?.let {
-        co.agrovision.core.model.pest.ProfessionalApproval(
-            agronomistName = it.agronomistName,
-            licenseNumber = it.licenseNumber,
-            approvedAtEpochMillis = it.approvedAt,
-        )
-    },
-)
