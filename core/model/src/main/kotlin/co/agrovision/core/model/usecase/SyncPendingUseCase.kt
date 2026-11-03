@@ -11,6 +11,7 @@ import co.agrovision.core.model.port.AccountRepository
 import co.agrovision.core.model.port.CaptureRepository
 import co.agrovision.core.model.port.Clock
 import co.agrovision.core.model.port.ConnectivityMonitor
+import co.agrovision.core.model.port.ModelRegistryRepository
 import co.agrovision.core.model.port.ReviewRequestRepository
 import co.agrovision.core.model.port.SettingsRepository
 import co.agrovision.core.model.port.SyncGateway
@@ -46,6 +47,7 @@ class SyncPendingUseCase @Inject constructor(
     private val settings: SettingsRepository,
     private val connectivity: ConnectivityMonitor,
     private val clock: Clock,
+    private val modelRegistry: ModelRegistryRepository,
 ) {
 
     /** Una sola sincronización a la vez en todo el proceso: el disparador de primer
@@ -161,9 +163,13 @@ class SyncPendingUseCase @Inject constructor(
         withoutExactLocation.forEach { holdForExactLocation(it, now) }
         if (reviewBatch.isNotEmpty()) {
             // Variedad y edad del cafetal viajan en la nota (ver `withFarmContext`).
+            // Sin captura (el productor pidió revisión sin analizar), el servidor igual conoce
+            // el modelo que tiene el teléfono instalado: se manda el de la ranura activa.
+            val installedModelVersion = modelRegistry.currentState().active?.version
             val outgoing = reviewBatch.map { review ->
                 review.withFarmContext(current).copy(
-                    modelVersion = review.captureId?.let { captures.findById(it)?.modelVersion },
+                    modelVersion = review.captureId?.let { captures.findById(it)?.modelVersion }
+                        ?: installedModelVersion,
                 )
             }
             when (val result = gateway.uploadReviewRequests(outgoing)) {

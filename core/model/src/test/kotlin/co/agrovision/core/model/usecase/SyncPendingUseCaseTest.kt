@@ -15,6 +15,9 @@ import co.agrovision.core.model.port.CaptureRepository
 import co.agrovision.core.model.port.Clock
 import co.agrovision.core.model.port.ConnectivityMonitor
 import co.agrovision.core.model.port.ConnectivityStatus
+import co.agrovision.core.model.mlmodel.ModelRegistryState
+import co.agrovision.core.model.mlmodel.ModelSlot
+import co.agrovision.core.model.port.ModelRegistryRepository
 import co.agrovision.core.model.port.ReviewRequestRepository
 import co.agrovision.core.model.port.SettingsRepository
 import co.agrovision.core.model.port.SyncGateway
@@ -87,6 +90,16 @@ class SyncPendingUseCaseTest {
         every { it.current() } returns ConnectivityStatus(isOnline = true, isMetered = false)
     }
 
+    private val modelRegistry = mockk<ModelRegistryRepository>().also {
+        coEvery { it.currentState() } returns ModelRegistryState(
+            activeSlot = ModelSlot.entries.first(),
+            active = null,
+            standby = null,
+            lastCheckEpochMillis = 0L,
+            lastFailure = null,
+        )
+    }
+
     private val sync = SyncPendingUseCase(
         captures = captures,
         reviews = reviews,
@@ -95,6 +108,7 @@ class SyncPendingUseCaseTest {
         settings = settings,
         connectivity = connectivity,
         clock = Clock { NOW },
+        modelRegistry = modelRegistry,
     )
 
     // ── Una URL por foto ─────────────────────────────────────────────────────
