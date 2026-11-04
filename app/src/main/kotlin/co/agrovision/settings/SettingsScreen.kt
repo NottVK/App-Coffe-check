@@ -19,7 +19,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -27,6 +30,10 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -45,8 +52,10 @@ fun SettingsScreen(
     state: SettingsUiState,
     viewModel: SettingsViewModel,
     onBack: () -> Unit,
+    onOpenPolicy: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var confirmRevoke by remember { mutableStateOf(false) }
     val gutter = AgroTheme.dimensions.gutter
     val context = LocalContext.current
     val preferences = state.preferences
@@ -181,6 +190,38 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.error,
                 )
             }
+
+            // Habeas data: leer la política y retirar la autorización. Es aparte del
+            // interruptor de entrenamiento: son consentimientos distintos.
+            Text(
+                text = stringResource(R.string.ajustes_politica),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = state.dataPolicyAcceptedAtEpochMillis
+                    ?.let { stringResource(R.string.ajustes_politica_aceptada, state.dataPolicyVersion.orEmpty(), formatDay(it)) }
+                    ?: stringResource(R.string.ajustes_politica_no_aceptada),
+                style = MaterialTheme.typography.bodyMedium,
+                color = AgroTheme.semantic.mutedText,
+            )
+            if (state.policyNotSynced) {
+                Text(
+                    text = stringResource(R.string.ajustes_politica_sin_enviar),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            OutlinedButton(onClick = onOpenPolicy, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.ajustes_politica_leer))
+            }
+            if (state.dataPolicyVersion != null) {
+                TextButton(onClick = { confirmRevoke = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = stringResource(R.string.ajustes_politica_revocar),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
         }
 
         Text(
@@ -190,6 +231,36 @@ fun SettingsScreen(
             modifier = Modifier.padding(horizontal = gutter),
         )
     }
+
+    if (confirmRevoke) {
+        RevokePolicyDialog(
+            onConfirm = {
+                confirmRevoke = false
+                viewModel.revokeDataPolicy()
+            },
+            onDismiss = { confirmRevoke = false },
+        )
+    }
+}
+
+@Composable
+private fun RevokePolicyDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.ajustes_politica_revocar_titulo)) },
+        text = { Text(stringResource(R.string.ajustes_politica_revocar_cuerpo)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(
+                    text = stringResource(R.string.ajustes_politica_revocar_confirmar),
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.ajustes_politica_cancelar)) }
+        },
+    )
 }
 
 @Composable
@@ -322,6 +393,9 @@ private fun ModelUpdateFailure.messageRes(): Int = when (this) {
     ModelUpdateFailure.STORAGE_FULL -> R.string.ajustes_modelo_err_espacio
     ModelUpdateFailure.INCOMPATIBLE_APP_VERSION -> R.string.ajustes_modelo_err_app
 }
+
+private fun formatDay(epochMillis: Long): String =
+    java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(java.util.Date(epochMillis))
 
 private fun formatDate(epochMillis: Long): String =
     java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT)

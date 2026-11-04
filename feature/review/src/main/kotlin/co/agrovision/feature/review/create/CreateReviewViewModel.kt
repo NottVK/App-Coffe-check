@@ -338,7 +338,8 @@ class CreateReviewViewModel @Inject constructor(
                     // Lo elegido queda como punto de partida de la próxima solicitud.
                     account.updateFarmDetails(state.variety, state.plantingAge)
                     val current = account.current()
-                    val effect = if (current.needsSignIn || current.needsProfile) {
+                    // La política de datos se pide una vez (o si cambió o la revocó), no en cada envío.
+                    val effect = if (current.needsSignIn || current.needsProfile || current.needsPolicy) {
                         CreateReviewEffect.SignIn(result.value.id)
                     } else {
                         CreateReviewEffect.Sent(result.value.id)

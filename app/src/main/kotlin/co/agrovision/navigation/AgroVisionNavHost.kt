@@ -34,6 +34,7 @@ import androidx.navigation.navArgument
 import androidx.navigation.NavType
 import co.agrovision.R
 import co.agrovision.core.designsystem.theme.AgroTheme
+import co.agrovision.feature.review.policy.DataPolicyScreen
 import co.agrovision.feature.catalog.CatalogScreen
 import co.agrovision.feature.catalog.CatalogViewModel
 import co.agrovision.feature.catalog.PestDetailScreen
@@ -73,6 +74,7 @@ object AgroVisionDestinations {
     const val REVIEW_SENT = "solicitudes/enviada/{reviewId}"
     const val SIGN_IN = "cuenta/ingresar?reviewId={reviewId}"
     const val SETTINGS = "ajustes"
+    const val DATA_POLICY = "cuenta/politica-datos"
 
     fun pestDetail(pestId: String) = "catalogo/$pestId"
     /** Sin `captureId`, la solicitud arranca directo en la toma guiada, sin pasar
@@ -222,7 +224,12 @@ fun AgroVisionNavHost(
                     state = state,
                     viewModel = viewModel,
                     onBack = { navController.popBackStack() },
+                    onOpenPolicy = { navController.navigate(AgroVisionDestinations.DATA_POLICY) },
                 )
+            }
+
+            composable(AgroVisionDestinations.DATA_POLICY) {
+                DataPolicyScreen(onBack = { navController.popBackStack() })
             }
 
             composable(AgroVisionDestinations.SCAN) {
@@ -276,6 +283,7 @@ fun AgroVisionNavHost(
                         }
                     },
                     onClose = { navController.popBackStack() },
+                    onOpenPolicy = { navController.navigate(AgroVisionDestinations.DATA_POLICY) },
                 )
             }
 

@@ -28,6 +28,13 @@ interface AccountGateway {
     ): AgroResult<ProfileRegistration, DomainError>
 
     suspend fun setTrainingConsent(granted: Boolean): AgroResult<Unit, DomainError>
+
+    /** Registra en el servidor que el productor aceptó esa versión de la política
+     *  de datos. Es la prueba de la autorización. */
+    suspend fun acceptDataPolicy(version: String): AgroResult<Unit, DomainError>
+
+    /** Retira la autorización de tratamiento de datos en el servidor. */
+    suspend fun revokeDataPolicy(): AgroResult<Unit, DomainError>
 }
 
 enum class ProfileRegistration {

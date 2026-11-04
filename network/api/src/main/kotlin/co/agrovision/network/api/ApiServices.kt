@@ -2,6 +2,7 @@ package co.agrovision.network.api
 
 import co.agrovision.network.api.dto.CaptureBatchRequestDto
 import co.agrovision.network.api.dto.ConsentRevocationDto
+import co.agrovision.network.api.dto.DataPolicyAcceptanceDto
 import co.agrovision.network.api.dto.ModelManifestDto
 import co.agrovision.network.api.dto.OtpRequestDto
 import co.agrovision.network.api.dto.OtpVerificationDto
@@ -103,4 +104,10 @@ interface AgroVisionApiService {
 
     @PATCH("productores/me/consentimiento/revocar")
     suspend fun revokeTrainingConsent(@Body body: ConsentRevocationDto): Response<Unit>
+
+    @POST("auth/politica-datos/aceptar")
+    suspend fun acceptDataPolicy(@Body body: DataPolicyAcceptanceDto): Response<Unit>
+
+    @POST("auth/politica-datos/revocar")
+    suspend fun revokeDataPolicy(): Response<Unit>
 }

@@ -143,6 +143,10 @@ data class ReviewResolutionDto(
 
 // ── Identidad ────────────────────────────────────────────────────────────────
 
+/** Habeas data: la versión de la política que el productor acaba de aceptar. */
+@Serializable
+data class DataPolicyAcceptanceDto(val version: String)
+
 @Serializable
 data class OtpRequestDto(
     val telefono: String,

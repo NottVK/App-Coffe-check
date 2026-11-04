@@ -33,6 +33,12 @@ data class SettingsUiState(
     val trainingConsent: Boolean = false,
     /** La última vez que se cambió el consentimiento no llegó al servidor. */
     val consentNotSynced: Boolean = false,
+    /** Habeas data: política de datos que el productor aceptó y cuándo (null si no
+     *  la ha aceptado o la revocó). */
+    val dataPolicyVersion: String? = null,
+    val dataPolicyAcceptedAtEpochMillis: Long? = null,
+    /** La revocación no llegó al servidor: la interfaz no puede darla por hecha. */
+    val policyNotSynced: Boolean = false,
     val model: ModelStatusUi = ModelStatusUi(),
 )
 
@@ -66,19 +72,23 @@ class SettingsViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val consentNotSynced = MutableStateFlow(false)
+    private val policyNotSynced = MutableStateFlow(false)
     private val modelCheck = MutableStateFlow(ModelStatusUi())
 
     val state: StateFlow<SettingsUiState> = combine(
         settings.observe(),
         account.observe(),
-        consentNotSynced,
+        combine(consentNotSynced, policyNotSynced) { consent, policy -> consent to policy },
         registry.observeState(),
         modelCheck,
-    ) { preferences, current, notSynced, registryState, check ->
+    ) { preferences, current, unsynced, registryState, check ->
         SettingsUiState(
             preferences = preferences,
             trainingConsent = current.trainingConsent,
-            consentNotSynced = notSynced,
+            consentNotSynced = unsynced.first,
+            dataPolicyVersion = current.dataPolicyVersion,
+            dataPolicyAcceptedAtEpochMillis = current.dataPolicyAcceptedAtEpochMillis,
+            policyNotSynced = unsynced.second,
             model = check.copy(
                 activeVersion = registryState.active?.version,
                 installedAtEpochMillis = registryState.active?.installedAtEpochMillis ?: 0L,
@@ -110,6 +120,15 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             val result = account.setTrainingConsent(granted)
             consentNotSynced.update { result is AgroResult.Failure }
+        }
+    }
+
+    /** Retira la autorización de tratamiento de datos (habeas data). La próxima
+     *  solicitud vuelve a pedirla. */
+    fun revokeDataPolicy() {
+        viewModelScope.launch {
+            val result = account.revokeDataPolicy()
+            policyNotSynced.update { result is AgroResult.Failure }
         }
     }
 

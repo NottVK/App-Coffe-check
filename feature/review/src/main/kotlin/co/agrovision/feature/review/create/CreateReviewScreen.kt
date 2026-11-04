@@ -409,6 +409,12 @@ private fun ReviewForm(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
+                // Transparencia, no un segundo consentimiento: la autorización ya se dio.
+                Text(
+                    text = stringResource(R.string.solicitud_aviso_datos),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = AgroTheme.semantic.mutedText,
+                )
                 PrimaryFieldButton(
                     text = stringResource(
                         if (state.submitting) R.string.solicitud_guardando else R.string.solicitud_enviar

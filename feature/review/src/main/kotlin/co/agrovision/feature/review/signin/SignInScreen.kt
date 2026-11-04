@@ -41,6 +41,7 @@ import co.agrovision.feature.review.components.FieldInput
 import co.agrovision.feature.review.components.ReviewHero
 import co.agrovision.feature.review.components.ReviewTopBar
 import co.agrovision.feature.review.components.SectionTitle
+import co.agrovision.feature.review.policy.PolicyConsentRow
 
 /**
  * Ingreso en tres pasos: celular, código y finca.
@@ -53,6 +54,7 @@ import co.agrovision.feature.review.components.SectionTitle
 fun SignInScreen(
     state: SignInState,
     onIntent: (SignInIntent) -> Unit,
+    onOpenPolicy: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     BackHandler { onIntent(SignInIntent.Back) }
@@ -65,7 +67,12 @@ fun SignInScreen(
             .imePadding(),
     ) {
         ReviewTopBar(
-            title = stringResource(R.string.ingreso_paso, state.step.ordinal + 1, SignInStep.entries.size),
+            title = if (state.step == SignInStep.POLICY) {
+                stringResource(R.string.ingreso_politica_barra)
+            } else {
+                // POLICY no cuenta: el ingreso sigue siendo de tres pasos.
+                stringResource(R.string.ingreso_paso, state.step.ordinal + 1, SignInStep.entries.size - 1)
+            },
             onBack = { onIntent(SignInIntent.Back) },
             backDescription = stringResource(R.string.solicitud_atras),
         )
@@ -78,16 +85,17 @@ fun SignInScreen(
             verticalArrangement = Arrangement.spacedBy(AgroTheme.dimensions.gutterWide),
         ) {
             when (state.step) {
-                SignInStep.PHONE -> PhoneStep(state, onIntent)
+                SignInStep.PHONE -> PhoneStep(state, onIntent, onOpenPolicy)
                 SignInStep.CODE -> CodeStep(state, onIntent)
                 SignInStep.PROFILE -> ProfileStep(state, onIntent)
+                SignInStep.POLICY -> PolicyStep(state, onIntent, onOpenPolicy)
             }
         }
     }
 }
 
 @Composable
-private fun PhoneStep(state: SignInState, onIntent: (SignInIntent) -> Unit) {
+private fun PhoneStep(state: SignInState, onIntent: (SignInIntent) -> Unit, onOpenPolicy: () -> Unit) {
     ReviewHero(
         title = stringResource(R.string.ingreso_telefono_titulo),
         body = stringResource(R.string.ingreso_telefono_cuerpo),
@@ -109,12 +117,54 @@ private fun PhoneStep(state: SignInState, onIntent: (SignInIntent) -> Unit) {
             )
         },
     )
+    // Habeas data: la autorización va antes del código, que es cuando empezamos
+    // a guardar datos personales.
+    PolicyConsentRow(
+        checked = state.policyAccepted,
+        onCheckedChange = { onIntent(SignInIntent.SetPolicyAccepted(it)) },
+        onOpenPolicy = onOpenPolicy,
+    )
+    if (state.policyMissing) {
+        Text(
+            text = stringResource(R.string.ingreso_politica_requerida),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
     ErrorText(state)
     PrimaryFieldButton(
         text = stringResource(R.string.ingreso_enviar_codigo),
         icon = Icons.Filled.Sms,
-        enabled = !state.busy,
+        enabled = !state.busy && state.policyAccepted,
         onClick = { onIntent(SignInIntent.SendCode) },
+    )
+}
+
+/** Para quien ya tiene sesión pero tiene que aceptar de nuevo la política. */
+@Composable
+private fun PolicyStep(state: SignInState, onIntent: (SignInIntent) -> Unit, onOpenPolicy: () -> Unit) {
+    ReviewHero(
+        title = stringResource(R.string.ingreso_politica_titulo),
+        body = stringResource(R.string.ingreso_politica_cuerpo),
+    )
+    PolicyConsentRow(
+        checked = state.policyAccepted,
+        onCheckedChange = { onIntent(SignInIntent.SetPolicyAccepted(it)) },
+        onOpenPolicy = onOpenPolicy,
+    )
+    if (state.policyMissing) {
+        Text(
+            text = stringResource(R.string.ingreso_politica_requerida),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
+    ErrorText(state)
+    PrimaryFieldButton(
+        text = stringResource(R.string.ingreso_politica_aceptar),
+        icon = Icons.Filled.Check,
+        enabled = !state.busy && state.policyAccepted,
+        onClick = { onIntent(SignInIntent.AcceptPolicy) },
     )
 }
 

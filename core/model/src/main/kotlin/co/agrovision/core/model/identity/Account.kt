@@ -53,7 +53,17 @@ data class Account(
      *  solicitud: el perfil del backend no tiene dónde guardarlos. */
     val coffeeVariety: CoffeeVariety? = null,
     val plantingAge: PlantingAge? = null,
+    /** Versión de la política de datos que el productor aceptó y cuándo. Es una
+     *  copia local: la autoridad es el servidor, que guarda la aceptación como
+     *  prueba de la autorización. `null` si no ha aceptado o la revocó. */
+    val dataPolicyVersion: String? = null,
+    val dataPolicyAcceptedAtEpochMillis: Long? = null,
 ) {
+    /** Falta aceptar la política vigente (nunca la aceptó, la revocó, o cambió
+     *  de versión). Se pide una vez, al enviar una solicitud; no en cada envío. */
+    val needsPolicy: Boolean
+        get() = dataPolicyVersion != DataPolicy.CURRENT_VERSION
+
     /** Lo que falta para poder enviar solicitudes: sesión vigente y perfil en el
      *  servidor. Los datos del cafetal cambian seguido y se editan en Ajustes;
      *  no bloquean el envío. */

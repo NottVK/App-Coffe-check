@@ -86,4 +86,15 @@
     <string name="historial_foto_rechazada">Foto no válida</string>
     <string name="historial_confianza">%1$d %%</string>
     <string name="scan_cerrar">Cerrar la cámara</string>
+
+    <string name="ajustes_politica">Política de datos</string>
+    <string name="ajustes_politica_aceptada">Versión %1$s aceptada el %2$s</string>
+    <string name="ajustes_politica_no_aceptada">Aún no has autorizado el tratamiento de tus datos.</string>
+    <string name="ajustes_politica_leer">Leer la política</string>
+    <string name="ajustes_politica_revocar">Revocar autorización</string>
+    <string name="ajustes_politica_revocar_titulo">¿Revocar tu autorización?</string>
+    <string name="ajustes_politica_revocar_cuerpo">Dejaremos de tratar tus datos y no podrás enviar nuevas solicitudes a un agrónomo hasta que la aceptes de nuevo.</string>
+    <string name="ajustes_politica_revocar_confirmar">Revocar</string>
+    <string name="ajustes_politica_cancelar">Cancelar</string>
+    <string name="ajustes_politica_sin_enviar">Se revocó en el teléfono, pero aún no se pudo avisar al servidor. Inicia sesión para completarlo.</string>
 </resources>

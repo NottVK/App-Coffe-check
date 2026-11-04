@@ -158,4 +158,36 @@
     <string name="resolucion_inutilizable">Las fotos no sirvieron</string>
 
     <string name="nav_solicitudes">Solicitudes</string>
+
+    <!-- Habeas data: autorización de tratamiento de datos (Ley 1581 de 2012). Responsable: SENA. -->
+    <string name="ingreso_politica_barra">Autorización de datos</string>
+    <string name="ingreso_politica_acepto">Autorizo el tratamiento de mis datos personales según la Política de Tratamiento de Datos del SENA.</string>
+    <string name="ingreso_politica_leer">Leer la política</string>
+    <string name="ingreso_politica_requerida">Para continuar tienes que autorizar el tratamiento de tus datos.</string>
+    <string name="ingreso_politica_titulo">Autoriza el uso de tus datos</string>
+    <string name="ingreso_politica_cuerpo">Antes de enviar tu solicitud necesitamos tu autorización para tratar tus datos. Solo te la pedimos una vez, o si la política cambia.</string>
+    <string name="ingreso_politica_aceptar">Aceptar y continuar</string>
+    <string name="solicitud_aviso_datos">Al enviar, compartes tus fotos y la ubicación de la captura con el agrónomo asignado.</string>
+
+    <string name="politica_titulo">Política de datos</string>
+    <string name="politica_atras">Volver</string>
+    <string name="politica_nombre">Política de Tratamiento de Datos Personales</string>
+    <string name="politica_version">Versión %1$s</string>
+    <string name="politica_intro">AgroVisión es una herramienta del SENA para el diagnóstico de plagas del café. Esta política explica cómo se tratan tus datos personales, conforme a la Ley 1581 de 2012 (habeas data) y sus decretos reglamentarios.</string>
+    <string name="politica_responsable_titulo">1. Responsable del tratamiento</string>
+    <string name="politica_responsable_cuerpo">El responsable del tratamiento de tus datos es el Servicio Nacional de Aprendizaje – SENA.</string>
+    <string name="politica_datos_titulo">2. Qué datos recolectamos</string>
+    <string name="politica_datos_cuerpo">• Tu número de celular.\n• Tu nombre, el nombre de tu finca, la vereda y el municipio.\n• Las fotos que tomas de tus cultivos.\n• La ubicación (coordenadas) del lugar donde tomas cada foto, cuando lo permites.\n• Los mensajes que intercambias con el agrónomo asignado.\n\nNo recolectamos datos sensibles.</string>
+    <string name="politica_finalidad_titulo">3. Para qué los usamos</string>
+    <string name="politica_finalidad_cuerpo">• Verificar tu identidad con un código enviado por mensaje.\n• Que un agrónomo revise tus casos y te responda.\n• Ubicar los casos para entender dónde aparecen las plagas.\n• Mejorar el modelo de reconocimiento de plagas, solo si lo autorizas aparte con la opción «Usar mis fotos para mejorar el modelo».\n• Generar estadísticas del programa sin identificarte.</string>
+    <string name="politica_compartir_titulo">4. Con quién se comparten</string>
+    <string name="politica_compartir_cuerpo">Tus fotos, la ubicación de la captura y tu información de contacto las ve el agrónomo que atiende tu solicitud y el personal autorizado del SENA que administra el programa. No vendemos tus datos.</string>
+    <string name="politica_derechos_titulo">5. Tus derechos</string>
+    <string name="politica_derechos_cuerpo">Como titular puedes: conocer, actualizar y rectificar tus datos; pedir prueba de la autorización que diste; ser informado del uso que se les da; presentar quejas ante la Superintendencia de Industria y Comercio; revocar tu autorización y pedir que se supriman tus datos cuando no exista un deber legal de conservarlos.\n\nPuedes revocar tu autorización en cualquier momento desde Ajustes › Privacidad. Si la revocas, no podrás enviar nuevas solicitudes a un agrónomo hasta que la aceptes de nuevo.</string>
+    <string name="politica_facultativo_titulo">6. Respuestas facultativas</string>
+    <string name="politica_facultativo_cuerpo">Autorizar el tratamiento es voluntario, pero sin la autorización no podemos atender tus solicitudes de revisión. Puedes seguir usando el escaneo y el catálogo de plagas sin crear cuenta.</string>
+    <string name="politica_contacto_titulo">7. Cómo ejercer tus derechos</string>
+    <string name="politica_contacto_cuerpo">Escribe al canal de atención de protección de datos del SENA: [CANAL DE CONTACTO DE PROTECCIÓN DE DATOS DEL SENA]. Atenderemos tu consulta o reclamo dentro de los plazos de la ley.</string>
+    <string name="politica_vigencia_titulo">8. Vigencia y cambios</string>
+    <string name="politica_vigencia_cuerpo">Conservamos tus datos mientras mantengas tu cuenta y sea necesario para las finalidades descritas. Si esta política cambia, te la volveremos a mostrar y te pediremos aceptarla de nuevo.</string>
 </resources>

@@ -8,6 +8,7 @@ import co.agrovision.core.model.identity.ProducerProfile
 import co.agrovision.core.model.port.AccountGateway
 import co.agrovision.core.model.port.ProfileRegistration
 import co.agrovision.network.api.dto.ConsentRevocationDto
+import co.agrovision.network.api.dto.DataPolicyAcceptanceDto
 import co.agrovision.network.api.dto.OtpRequestDto
 import co.agrovision.network.api.dto.OtpVerificationDto
 import co.agrovision.network.api.dto.ProducerProfileRequestDto
@@ -122,6 +123,16 @@ class RetrofitAccountGateway @Inject constructor(
                 if (granted) api.grantTrainingConsent()
                 else api.revokeTrainingConsent(ConsentRevocationDto(confirmacion = true))
             }.unit()
+        }
+
+    override suspend fun acceptDataPolicy(version: String): AgroResult<Unit, DomainError> =
+        withContext(io) {
+            call { api.acceptDataPolicy(DataPolicyAcceptanceDto(version = version)) }.unit()
+        }
+
+    override suspend fun revokeDataPolicy(): AgroResult<Unit, DomainError> =
+        withContext(io) {
+            call { api.revokeDataPolicy() }.unit()
         }
 
     // ── Utilidades ───────────────────────────────────────────────────────────

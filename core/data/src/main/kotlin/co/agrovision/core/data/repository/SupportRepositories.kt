@@ -22,6 +22,7 @@ import co.agrovision.core.model.DomainError
 import co.agrovision.core.model.capture.GeoPoint
 import co.agrovision.core.model.identity.Account
 import co.agrovision.core.model.identity.CoffeeVariety
+import co.agrovision.core.model.identity.DataPolicy
 import co.agrovision.core.model.identity.PlantingAge
 import co.agrovision.core.model.identity.ProducerProfile
 import co.agrovision.core.model.identity.UserTier
@@ -162,6 +163,33 @@ class AccountRepositoryImpl @Inject constructor(
             }
         }
         return expireSessionOn(gateway.setTrainingConsent(granted))
+    }
+
+    override suspend fun acceptDataPolicy(): AgroResult<Unit, DomainError> {
+        if (tokens.accessToken() == null) return AgroResult.failure(DomainError.NotSignedIn)
+        val version = DataPolicy.CURRENT_VERSION
+        return when (val result = expireSessionOn(gateway.acceptDataPolicy(version))) {
+            is AgroResult.Failure -> result
+            is AgroResult.Success -> {
+                val now = clock.nowEpochMillis()
+                store.update {
+                    it.copy(dataPolicyVersion = version, dataPolicyAcceptedAtEpochMillis = now)
+                }
+                AgroResult.unit
+            }
+        }
+    }
+
+    override suspend fun revokeDataPolicy(): AgroResult<Unit, DomainError> {
+        store.update { it.copy(dataPolicyVersion = null, dataPolicyAcceptedAtEpochMillis = null) }
+        if (tokens.accessToken() == null) {
+            return if (store.current().tier == UserTier.T0_ANONIMO) {
+                AgroResult.unit
+            } else {
+                AgroResult.failure(DomainError.NotSignedIn)
+            }
+        }
+        return expireSessionOn(gateway.revokeDataPolicy())
     }
 
     override suspend fun markSessionExpired() {

@@ -225,6 +225,18 @@ interface AccountRepository {
     /** La revocación tiene que llegar al servidor: si falla, se devuelve el error
      *  para que la interfaz no la dé por hecha. */
     suspend fun setTrainingConsent(granted: Boolean): AgroResult<Unit, DomainError>
+
+    /**
+     * Habeas data: registra en el servidor que el productor aceptó la política
+     * vigente y solo entonces la guarda en el teléfono. Primero el servidor,
+     * porque es donde queda la prueba de la autorización.
+     */
+    suspend fun acceptDataPolicy(): AgroResult<Unit, DomainError>
+
+    /** Retira la autorización. Local primero, como el consentimiento de
+     *  entrenamiento; si el servidor no se entera, se devuelve el error para que
+     *  la interfaz no lo dé por hecho. */
+    suspend fun revokeDataPolicy(): AgroResult<Unit, DomainError>
 }
 
 interface ModelRegistryRepository {

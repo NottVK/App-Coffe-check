@@ -59,7 +59,7 @@ fun CreateReviewRoute(
 }
 
 @Composable
-fun SignInRoute(onDone: () -> Unit, onClose: () -> Unit) {
+fun SignInRoute(onDone: () -> Unit, onClose: () -> Unit, onOpenPolicy: () -> Unit) {
     val viewModel: SignInViewModel = hiltViewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -72,7 +72,7 @@ fun SignInRoute(onDone: () -> Unit, onClose: () -> Unit) {
         }
     }
 
-    SignInScreen(state = state, onIntent = viewModel::onIntent)
+    SignInScreen(state = state, onIntent = viewModel::onIntent, onOpenPolicy = onOpenPolicy)
 }
 
 @Composable

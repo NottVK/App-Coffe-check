@@ -19,7 +19,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-enum class SignInStep { PHONE, CODE, PROFILE }
+/** POLICY no es un paso del ingreso: solo aparece cuando una cuenta ya iniciada
+ *  tiene que aceptar de nuevo la política de datos (la revocó o cambió). */
+enum class SignInStep { PHONE, CODE, PROFILE, POLICY }
 
 data class ProfileForm(
     val fullName: String = "",
@@ -42,6 +44,10 @@ data class SignInState(
     val resendSeconds: Int = 0,
     val profile: ProfileForm = ProfileForm(),
     val invalidFields: Set<ProfileField> = emptySet(),
+    /** Habeas data: autorización de tratamiento de datos. Nace desmarcada y sin
+     *  ella no se envía el código. */
+    val policyAccepted: Boolean = false,
+    val policyMissing: Boolean = false,
     val busy: Boolean = false,
     val error: UiText? = null,
 ) {
@@ -65,6 +71,8 @@ sealed interface SignInIntent {
     data object ChangeNumber : SignInIntent
     data class EditProfile(val transform: (ProfileForm) -> ProfileForm) : SignInIntent
     data object SaveProfile : SignInIntent
+    data class SetPolicyAccepted(val value: Boolean) : SignInIntent
+    data object AcceptPolicy : SignInIntent
     data object Back : SignInIntent
 }
 
@@ -98,8 +106,14 @@ class SignInViewModel @Inject constructor(
             val current = account.current()
             _state.update {
                 it.copy(
-                    step = if (current.needsSignIn) SignInStep.PHONE else SignInStep.PROFILE,
+                    step = when {
+                        current.needsSignIn -> SignInStep.PHONE
+                        current.needsPolicy -> SignInStep.POLICY
+                        else -> SignInStep.PROFILE
+                    },
                     phoneDigits = current.phone?.removePrefix(COUNTRY_CODE).orEmpty(),
+                    // Quien ya la aceptó y solo vuelve a entrar la ve marcada.
+                    policyAccepted = !current.needsPolicy,
                     profile = current.toForm(),
                 )
             }
@@ -128,6 +142,10 @@ class SignInViewModel @Inject constructor(
                 it.copy(profile = intent.transform(it.profile), invalidFields = emptySet(), error = null)
             }
             SignInIntent.SaveProfile -> saveProfile()
+            is SignInIntent.SetPolicyAccepted -> _state.update {
+                it.copy(policyAccepted = intent.value, policyMissing = false, error = null)
+            }
+            SignInIntent.AcceptPolicy -> acceptPolicy()
             SignInIntent.Back -> when (_state.value.step) {
                 SignInStep.CODE -> _state.update { it.copy(step = SignInStep.PHONE, code = "", error = null) }
                 else -> viewModelScope.launch { _effects.send(SignInEffect.Closed) }
@@ -139,6 +157,11 @@ class SignInViewModel @Inject constructor(
         val digits = _state.value.phoneDigits
         if (digits.length != PHONE_DIGITS) {
             _state.update { it.copy(phoneInvalid = true) }
+            return
+        }
+        // Sin autorización no se recolecta nada: ni siquiera se manda el código.
+        if (!_state.value.policyAccepted) {
+            _state.update { it.copy(policyMissing = true) }
             return
         }
         runBusy {
@@ -162,12 +185,54 @@ class SignInViewModel @Inject constructor(
                 }
                 is AgroResult.Success -> {
                     val signedIn = result.value
-                    if (!signedIn.needsProfile) {
+                    // La aceptación marcada antes del código se registra en el
+                    // servidor apenas hay sesión: es la prueba de la autorización.
+                    // Si no llega, se pide de nuevo en su propio paso en vez de
+                    // dejar pasar al productor sin constancia.
+                    if (state.policyAccepted && signedIn.needsPolicy) {
+                        val registered = account.acceptDataPolicy()
+                        if (registered is AgroResult.Failure) {
+                            _state.update {
+                                it.copy(
+                                    step = SignInStep.POLICY,
+                                    profile = signedIn.toForm(),
+                                    error = UiText.Message(registered.error.message),
+                                )
+                            }
+                            return@runBusy
+                        }
+                    }
+                    if (signedIn.needsPolicy && !state.policyAccepted) {
+                        _state.update {
+                            it.copy(step = SignInStep.POLICY, profile = signedIn.toForm(), error = null)
+                        }
+                    } else if (!signedIn.needsProfile) {
                         _effects.send(SignInEffect.Done)
                     } else {
                         // Con perfil ya registrado en el servidor, el formulario
                         // llega relleno.
                         _state.update { it.copy(step = SignInStep.PROFILE, profile = signedIn.toForm(), error = null) }
+                    }
+                }
+            }
+        }
+    }
+
+    /** Paso suelto para quien ya tiene sesión: acepta, y sigue al perfil si le falta. */
+    private fun acceptPolicy() {
+        if (!_state.value.policyAccepted) {
+            _state.update { it.copy(policyMissing = true) }
+            return
+        }
+        runBusy {
+            when (val result = account.acceptDataPolicy()) {
+                is AgroResult.Failure -> _state.update { it.copy(error = UiText.Message(result.error.message)) }
+                is AgroResult.Success -> {
+                    val current = account.current()
+                    if (current.needsProfile) {
+                        _state.update { it.copy(step = SignInStep.PROFILE, profile = current.toForm(), error = null) }
+                    } else {
+                        _effects.send(SignInEffect.Done)
                     }
                 }
             }

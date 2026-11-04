@@ -59,6 +59,14 @@ class AccountStore @Inject constructor(
             preferences[Keys.SESSION_EXPIRED] = updated.sessionExpired
             updated.coffeeVariety?.let { preferences[Keys.COFFEE_VARIETY] = it.name }
             updated.plantingAge?.let { preferences[Keys.PLANTING_AGE] = it.name }
+            // A diferencia del resto, estos dos se pueden borrar: revocar la política
+            // tiene que dejarlos vacíos, no conservar el valor anterior.
+            val policyVersion = updated.dataPolicyVersion
+            if (policyVersion != null) preferences[Keys.DATA_POLICY_VERSION] = policyVersion
+            else preferences.remove(Keys.DATA_POLICY_VERSION)
+            val policyAt = updated.dataPolicyAcceptedAtEpochMillis
+            if (policyAt != null) preferences[Keys.DATA_POLICY_AT] = policyAt
+            else preferences.remove(Keys.DATA_POLICY_AT)
         }
     }
 
@@ -82,6 +90,8 @@ class AccountStore @Inject constructor(
             ?.let { name -> CoffeeVariety.entries.firstOrNull { it.name == name } },
         plantingAge = preferences[Keys.PLANTING_AGE]
             ?.let { name -> PlantingAge.entries.firstOrNull { it.name == name } },
+        dataPolicyVersion = preferences[Keys.DATA_POLICY_VERSION],
+        dataPolicyAcceptedAtEpochMillis = preferences[Keys.DATA_POLICY_AT],
     )
 
     private object Keys {
@@ -97,6 +107,8 @@ class AccountStore @Inject constructor(
         val SESSION_EXPIRED = booleanPreferencesKey("account_session_expired")
         val COFFEE_VARIETY = stringPreferencesKey("account_coffee_variety")
         val PLANTING_AGE = stringPreferencesKey("account_planting_age")
+        val DATA_POLICY_VERSION = stringPreferencesKey("account_data_policy_version")
+        val DATA_POLICY_AT = longPreferencesKey("account_data_policy_at")
         val DEVICE_ID = stringPreferencesKey("device_id")
     }
 }
