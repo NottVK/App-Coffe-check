@@ -184,6 +184,7 @@ class FakeReviewRepository : ReviewRequestRepository {
     override fun observeById(id: String): Flow<ReviewRequest?> =
         MutableStateFlow(saved.firstOrNull { it.id == id })
     override fun observeUnreadResolutions(): Flow<List<ReviewRequest>> = MutableStateFlow(emptyList())
+    override fun observePendingCount(): Flow<Int> = MutableStateFlow(saved.size)
 
     override suspend fun save(request: ReviewRequest): AgroResult<Unit, DomainError> {
         saved += request

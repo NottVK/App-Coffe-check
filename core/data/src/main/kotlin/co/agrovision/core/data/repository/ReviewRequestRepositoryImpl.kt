@@ -44,6 +44,8 @@ class ReviewRequestRepositoryImpl @Inject constructor(
     override fun observeMine(): Flow<List<ReviewRequest>> =
         dao.observeAll().map { rows -> rows.map { it.toDomain() } }
 
+    override fun observePendingCount(): Flow<Int> = dao.observePendingCount()
+
     override fun observeById(id: String): Flow<ReviewRequest?> =
         dao.observeById(id).map { it?.toDomain() }
 

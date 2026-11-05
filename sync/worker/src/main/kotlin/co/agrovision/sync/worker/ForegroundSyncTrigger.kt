@@ -11,6 +11,7 @@ import co.agrovision.core.model.port.CaptureRepository
 import co.agrovision.core.model.port.ModelRegistryRepository
 import co.agrovision.core.model.port.SettingsRepository
 import co.agrovision.core.model.port.ConnectivityMonitor
+import co.agrovision.core.model.port.ReviewRequestRepository
 import co.agrovision.core.model.usecase.ActivateModelUseCase
 import co.agrovision.core.model.usecase.RollBackModelUseCase
 import co.agrovision.core.model.usecase.CheckModelUpdateUseCase
@@ -24,9 +25,11 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -61,6 +64,7 @@ class ForegroundSyncTrigger @Inject constructor(
     private val rollBackModel: RollBackModelUseCase,
     private val connectivity: ConnectivityMonitor,
     private val captures: CaptureRepository,
+    private val reviews: ReviewRequestRepository,
     @Dispatcher(AgroDispatcher.IO) private val io: CoroutineDispatcher,
 ) : DefaultLifecycleObserver {
 
@@ -108,18 +112,25 @@ class ForegroundSyncTrigger @Inject constructor(
 
     /**
      * Mientras la app está en primer plano, sube lo que se vaya encolando sin
-     * esperar a que el productor salga y vuelva a entrar. Si el envío falla (sin
-     * red, cuenta sin validar) la cuenta de pendientes no cambia, así que no hay
-     * reintentos en bucle: el siguiente intento lo dispara otra captura o el
-     * próximo primer plano.
+     * esperar a que el productor salga y vuelva a entrar, y reintenta en cuanto
+     * vuelve la conexión: sin esto, lo guardado sin señal esperaba a que el
+     * productor cerrara y abriera la app.
+     *
+     * Vigila capturas **y** solicitudes de revisión. Si el envío falla (cuenta sin
+     * validar, política de solo WiFi) ni la cuenta de pendientes ni la conexión
+     * cambian, así que no hay reintentos en bucle: el siguiente intento lo
+     * dispara otra captura, otra solicitud o la conexión al volver.
      */
     @OptIn(FlowPreview::class)
     private fun watchPending() {
         pendingWatcher?.cancel()
         pendingWatcher = scope.launch {
-            captures.observePendingCount()
+            combine(
+                combine(captures.observePendingCount(), reviews.observePendingCount()) { a, b -> a + b },
+                connectivity.observe().map { it.isOnline },
+            ) { pending, online -> PendingWork(pending, online) }
                 .distinctUntilChanged()
-                .filter { it > 0 }
+                .filter { it.pending > 0 && it.online }
                 .debounce(PENDING_DEBOUNCE_MILLIS)
                 .collect { syncPending(SyncTrigger.FOREGROUND) }
         }
@@ -150,6 +161,9 @@ class ForegroundSyncTrigger @Inject constructor(
             scheduler.scheduleModelCheck(preferences.syncNetworkPolicy)
         }
     }
+
+    /** Pendientes y conexión juntos: cambia cuando se encola algo o cuando vuelve la red. */
+    private data class PendingWork(val pending: Int, val online: Boolean)
 
     private companion object {
         /** Agrupa ráfagas de escaneos en un solo envío. */

@@ -97,20 +97,31 @@ class CreateReviewRequestUseCase @Inject constructor(
     private suspend fun resolveExactLocation(
         request: Request,
     ): AgroResult<GeoPoint, DomainError> {
-        if (request.captureId != null) {
-            val fromPhoto = captures.findById(request.captureId)?.location?.takeIf { it.isExact }
-            if (fromPhoto != null) return AgroResult.success(fromPhoto)
-            // La foto no tiene coordenada exacta fiable: solo se sigue si el
-            // productor confirmó que sigue en el lote.
-            if (!request.confirmedStillAtLot) {
-                return AgroResult.failure(DomainError.LocationNeedsConfirmation)
-            }
-        }
+        val fromPhoto = request.captureId
+            ?.let { captures.findById(it)?.location?.takeIf { point -> point.isExact } }
+
+        // La ubicación activa es obligatoria para enviar, incluso si la foto ya
+        // trae coordenada exacta: sin permiso o con el GPS apagado no se envía.
         return when (val fix = location.acquireExactFix()) {
-            is FixResult.Fix -> AgroResult.success(fix.point.copy(isExact = true))
+            is FixResult.Fix ->
+                if (fromPhoto != null) {
+                    AgroResult.success(fromPhoto)
+                } else if (request.captureId != null && !request.confirmedStillAtLot) {
+                    // La foto no tiene coordenada exacta fiable: solo se sigue si
+                    // el productor confirmó que sigue en el lote.
+                    AgroResult.failure(DomainError.LocationNeedsConfirmation)
+                } else {
+                    AgroResult.success(fix.point.copy(isExact = true))
+                }
             FixResult.PermissionDenied -> AgroResult.failure(DomainError.LocationPermissionDenied)
             FixResult.GpsDisabled -> AgroResult.failure(DomainError.GpsDisabled)
-            FixResult.TimedOut -> AgroResult.failure(DomainError.LocationFixTimeout)
+            // Ubicación activa pero sin señal a tiempo: vale la coordenada de la foto.
+            FixResult.TimedOut ->
+                if (fromPhoto != null) {
+                    AgroResult.success(fromPhoto)
+                } else {
+                    AgroResult.failure(DomainError.LocationFixTimeout)
+                }
         }
     }
 

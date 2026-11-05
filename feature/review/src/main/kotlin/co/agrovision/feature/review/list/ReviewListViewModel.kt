@@ -6,8 +6,10 @@ import co.agrovision.core.model.capture.SyncState
 import co.agrovision.core.model.port.AccountRepository
 import co.agrovision.core.model.port.ReviewRequestRepository
 import co.agrovision.core.model.review.ReviewRequest
+import co.agrovision.core.model.usecase.SendNowFeedback
 import co.agrovision.core.model.usecase.SyncPendingUseCase
 import co.agrovision.core.model.usecase.SyncTrigger
+import co.agrovision.core.model.usecase.toSendNowFeedback
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -28,6 +30,8 @@ data class ReviewListState(
     val expandedId: String? = null,
     val sessionExpired: Boolean = false,
     val sending: Boolean = false,
+    /** Por qué «Enviar ahora» no envió; la pantalla lo muestra una vez y avisa con [ReviewListViewModel.onFeedbackShown]. */
+    val sendFeedback: SendNowFeedback? = null,
 ) {
     /** En cola local: por subir o esperando reintento. Las FAILED no cuentan:
      *  «Enviar ahora» no las mueve. */
@@ -46,7 +50,7 @@ class ReviewListViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val expanded = MutableStateFlow<String?>(null)
-    private val sending = MutableStateFlow(false)
+    private val send = MutableStateFlow(SendUi())
 
     /** Solicitudes recién quitadas que aún se pueden deshacer: se ocultan al
      *  instante y el borrado real espera [UNDO_WINDOW_MS]. */
@@ -60,15 +64,16 @@ class ReviewListViewModel @Inject constructor(
         reviews.observeUnreadResolutions().map { unread -> unread.map { it.id }.toSet() },
         account.observe(),
         expanded,
-        sending,
-    ) { requests, unread, current, expandedId, isSending ->
+        send,
+    ) { requests, unread, current, expandedId, sendUi ->
         ReviewListState(
             loading = false,
             requests = requests,
             unreadIds = unread,
             expandedId = expandedId,
             sessionExpired = current.sessionExpired,
-            sending = isSending,
+            sending = sendUi.sending,
+            sendFeedback = sendUi.feedback,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), ReviewListState())
 
@@ -82,13 +87,19 @@ class ReviewListViewModel @Inject constructor(
 
     /** También trae las respuestas nuevas: la sincronización baja estados. */
     fun onSendNow() {
-        if (sending.value) return
-        sending.value = true
+        if (send.value.sending) return
+        send.value = SendUi(sending = true)
         viewModelScope.launch {
-            syncPending(SyncTrigger.MANUAL)
-            sending.value = false
+            val result = syncPending(SyncTrigger.MANUAL)
+            send.value = SendUi(feedback = result.toSendNowFeedback())
         }
     }
+
+    fun onFeedbackShown() {
+        send.update { it.copy(feedback = null) }
+    }
+
+    private data class SendUi(val sending: Boolean = false, val feedback: SendNowFeedback? = null)
 
     fun delete(request: ReviewRequest) {
         val id = request.id

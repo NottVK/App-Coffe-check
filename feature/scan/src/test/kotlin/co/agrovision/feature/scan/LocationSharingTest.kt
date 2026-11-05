@@ -125,8 +125,43 @@ class LocationSharingTest {
         assertEquals(fieldFix.latitude, location.latitude)
         assertEquals(fieldFix.longitude, location.longitude)
         assertTrue(location.isExact)
-        assertEquals(0, gps.fixRequests, "con la coordenada exacta de la foto no hace falta un GPS nuevo")
+        assertEquals(1, gps.fixRequests, "siempre se comprueba que la ubicación esté activa")
         assertEquals(review, reviews.saved.single())
+    }
+
+    @Test
+    fun `con coordenada exacta en la foto pero GPS apagado no se envia`() = runTest {
+        val prefs = settings()
+        val capture = savedCapture(prefs)
+        gps.fix = FixResult.GpsDisabled
+
+        val result = createReview(prefs)(request(capture.id))
+
+        assertEquals(DomainError.GpsDisabled, (result as AgroResult.Failure).error)
+        assertTrue(reviews.saved.isEmpty())
+    }
+
+    @Test
+    fun `con coordenada exacta en la foto pero sin permiso no se envia`() = runTest {
+        val prefs = settings()
+        val capture = savedCapture(prefs)
+        gps.fix = FixResult.PermissionDenied
+
+        val result = createReview(prefs)(request(capture.id))
+
+        assertEquals(DomainError.LocationPermissionDenied, (result as AgroResult.Failure).error)
+        assertTrue(reviews.saved.isEmpty())
+    }
+
+    @Test
+    fun `ubicacion activa sin senal a tiempo usa la coordenada de la foto`() = runTest {
+        val prefs = settings()
+        val capture = savedCapture(prefs)
+        gps.fix = FixResult.TimedOut
+
+        val review = (createReview(prefs)(request(capture.id)) as AgroResult.Success).value
+
+        assertEquals(fieldFix.latitude, review.location?.latitude)
     }
 
     @Test
@@ -209,7 +244,6 @@ class LocationSharingTest {
 
         assertEquals(DomainError.LocationNeedsConfirmation, (result as AgroResult.Failure).error)
         assertTrue(reviews.saved.isEmpty())
-        assertEquals(0, gps.fixRequests)
     }
 
     @Test

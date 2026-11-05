@@ -36,6 +36,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -51,6 +52,7 @@ import co.agrovision.core.designsystem.component.StatusPill
 import co.agrovision.core.designsystem.theme.AgroTheme
 import co.agrovision.core.model.capture.SyncState
 import co.agrovision.core.model.review.ReviewRequest
+import co.agrovision.core.model.usecase.SendNowFeedback
 import co.agrovision.feature.review.R
 import co.agrovision.feature.review.components.InfoCard
 import co.agrovision.feature.review.components.displayStatus
@@ -66,6 +68,7 @@ fun ReviewListScreen(
     state: ReviewListState,
     onToggle: (ReviewRequest) -> Unit,
     onSendNow: () -> Unit,
+    onFeedbackShown: () -> Unit,
     onSignIn: () -> Unit,
     onNewRequest: () -> Unit,
     onDelete: (ReviewRequest) -> Unit,
@@ -77,6 +80,27 @@ fun ReviewListScreen(
     val scope = rememberCoroutineScope()
     val deletedMessage = stringResource(R.string.lista_eliminada)
     val undoLabel = stringResource(R.string.lista_deshacer)
+
+    // «Enviar ahora» dice por qué no envió, una sola vez
+    val feedbackText = state.sendFeedback?.let { feedback ->
+        stringResource(
+            when (feedback) {
+                SendNowFeedback.NO_CONNECTION -> R.string.lista_envio_sin_conexion
+                SendNowFeedback.METERED_NETWORK -> R.string.lista_envio_datos
+                SendNowFeedback.ACCOUNT_NOT_READY -> R.string.lista_envio_cuenta
+                SendNowFeedback.RATE_LIMITED -> R.string.lista_envio_ocupado
+                SendNowFeedback.SOME_FAILED -> R.string.lista_envio_fallo
+                SendNowFeedback.ERROR -> R.string.lista_envio_error
+            },
+        )
+    }
+    LaunchedEffect(state.sendFeedback) {
+        if (feedbackText != null) {
+            snackbars.currentSnackbarData?.dismiss()
+            snackbars.showSnackbar(message = feedbackText, duration = SnackbarDuration.Long)
+            onFeedbackShown()
+        }
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
     LazyColumn(

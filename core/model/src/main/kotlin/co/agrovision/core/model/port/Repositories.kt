@@ -110,6 +110,9 @@ interface ReviewRequestRepository {
 
     fun observeUnreadResolutions(): Flow<List<ReviewRequest>>
 
+    /** Solicitudes en cola local (PENDING): lo que el envío en primer plano vigila. */
+    fun observePendingCount(): Flow<Int>
+
     suspend fun save(request: ReviewRequest): AgroResult<Unit, DomainError>
 
     suspend fun nextBatchToUpload(limit: Int, nowEpochMillis: Long): List<ReviewRequest>

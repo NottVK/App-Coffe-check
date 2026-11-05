@@ -135,6 +135,12 @@
     <string name="lista_pendientes">%1$d por enviar</string>
     <string name="lista_pendientes_cuerpo">Se envían solas cuando haya señal.</string>
     <string name="lista_enviar_ahora">Enviar ahora</string>
+    <string name="lista_envio_sin_conexion">No hay conexión. Se enviarán solas cuando vuelva la señal.</string>
+    <string name="lista_envio_datos">Estás con datos móviles y elegiste enviar solo con WiFi. Conéctate a una WiFi o cámbialo en Ajustes.</string>
+    <string name="lista_envio_cuenta">Tu cuenta aún no puede enviar. Saldrán en cuanto esté validada.</string>
+    <string name="lista_envio_ocupado">El servidor está ocupado. Lo intentaremos de nuevo en unos minutos.</string>
+    <string name="lista_envio_fallo">Algunas solicitudes no se pudieron enviar. Se reintentará.</string>
+    <string name="lista_envio_error">No se pudo enviar. Inténtalo de nuevo.</string>
     <string name="lista_sesion_titulo">Tu sesión se cerró</string>
     <string name="lista_sesion_cuerpo">Entra con tu celular para que tus solicitudes salgan.</string>
     <string name="lista_entrar">Entrar</string>
