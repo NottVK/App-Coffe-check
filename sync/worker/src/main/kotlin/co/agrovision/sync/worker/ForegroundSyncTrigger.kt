@@ -25,6 +25,8 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -89,9 +91,9 @@ class ForegroundSyncTrigger @Inject constructor(
      * Sin modelo se pide siempre y en cualquier red: sin él la app no puede escanear. Con uno
      * instalado se respeta la política de datos del productor (con «solo WiFi» espera a la
      * WiFi, donde también corre el trabajo en segundo plano) y el caso de uso limita la
-     * frecuencia a una consulta cada 15 minutos.
+     * frecuencia a una consulta por minuto.
      */
-    private suspend fun updateModel() {
+    private suspend fun updateModel(forceIfNoModel: Boolean = true) {
         val hasModel = registry.currentState().active != null
         if (hasModel) {
             val network = connectivity.current()
@@ -99,7 +101,7 @@ class ForegroundSyncTrigger @Inject constructor(
             if (network.isMetered && !settings.current().syncNetworkPolicy.allowsMetered) return
         }
 
-        val decision = (checkModelUpdate(force = !hasModel) as? AgroResult.Success)?.value
+        val decision = (checkModelUpdate(force = forceIfNoModel && !hasModel) as? AgroResult.Success)?.value
         when (decision) {
             is ModelUpdateDecision.Available -> activateModel(decision.manifest)
             // Retirada de emergencia: el modelo anterior sigue en disco, no hay nada que descargar
@@ -109,6 +111,22 @@ class ForegroundSyncTrigger @Inject constructor(
     }
 
     private var pendingWatcher: Job? = null
+    private var modelWatcher: Job? = null
+
+    /**
+     * Con la app abierta, busca el modelo cada minuto. Sin esto, uno publicado mientras el
+     * productor ya está dentro solo llegaría al volver a abrirla. No fuerza la consulta: respeta
+     * la espera que dejan los fallos para no redescargar en bucle un modelo que no se instala.
+     */
+    private fun watchModel() {
+        modelWatcher?.cancel()
+        modelWatcher = scope.launch {
+            while (isActive) {
+                delay(MODEL_POLL_MILLIS)
+                updateModel(forceIfNoModel = false)
+            }
+        }
+    }
 
     /**
      * Mientras la app está en primer plano, sube lo que se vaya encolando sin
@@ -139,10 +157,13 @@ class ForegroundSyncTrigger @Inject constructor(
     override fun onStop(owner: LifecycleOwner) {
         pendingWatcher?.cancel()
         pendingWatcher = null
+        modelWatcher?.cancel()
+        modelWatcher = null
     }
 
     override fun onStart(owner: LifecycleOwner) {
         watchPending()
+        watchModel()
         scope.launch {
             // No se comprueba conectividad aquí: el caso de uso ya lo hace y
             // devuelve `NoConnection` sin efectos. Duplicar la comprobación
@@ -168,5 +189,8 @@ class ForegroundSyncTrigger @Inject constructor(
     private companion object {
         /** Agrupa ráfagas de escaneos en un solo envío. */
         const val PENDING_DEBOUNCE_MILLIS = 2_000L
+
+        /** Cada cuánto busca modelo nuevo mientras la app está en primer plano. */
+        const val MODEL_POLL_MILLIS = 60_000L
     }
 }

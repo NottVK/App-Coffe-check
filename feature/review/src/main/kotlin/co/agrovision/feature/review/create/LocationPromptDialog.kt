@@ -1,5 +1,11 @@
 package co.agrovision.feature.review.create
 
+import androidx.core.app.ActivityCompat
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
+import android.content.ContextWrapper
+import android.app.Activity
+import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -22,8 +28,23 @@ internal fun LocationPromptDialog(
     prompt: LocationPrompt?,
     onIntent: (CreateReviewIntent) -> Unit,
 ) {
-    if (prompt == null) return
     val context = LocalContext.current
+    // La ventana del sistema se lanza encima de la app. A Ajustes solo se va cuando Android ya
+    // no la muestra (negada dos veces o «no volver a preguntar»): ahí no queda otra salida.
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { granted ->
+        when {
+            granted[Manifest.permission.ACCESS_FINE_LOCATION] == true -> onIntent(CreateReviewIntent.RetryLocation)
+            !context.canAskLocationAgain() -> {
+                context.openAppSettings()
+                onIntent(CreateReviewIntent.DismissLocationPrompt)
+            }
+            else -> onIntent(CreateReviewIntent.DismissLocationPrompt)
+        }
+    }
+
+    if (prompt == null) return
     val content = prompt.content()
 
     AlertDialog(
@@ -37,12 +58,13 @@ internal fun LocationPromptDialog(
                         LocationPrompt.Consent -> onIntent(CreateReviewIntent.AcceptLocationConsent)
                         LocationPrompt.ConfirmStillAtLot -> onIntent(CreateReviewIntent.ConfirmStillAtLot)
                         LocationPrompt.Timeout -> onIntent(CreateReviewIntent.RetryLocation)
-                        // Lleva a la pantalla del sistema y devuelve al formulario:
-                        // el productor vuelve a pulsar «Enviar» cuando lo haya activado.
-                        LocationPrompt.PermissionDenied -> {
-                            context.openAppSettings()
-                            onIntent(CreateReviewIntent.DismissLocationPrompt)
-                        }
+                        // Pide el permiso con la ventana del sistema; si lo conceden, reintenta el envío.
+                        LocationPrompt.PermissionDenied -> permissionLauncher.launch(
+                            arrayOf(
+                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                Manifest.permission.ACCESS_COARSE_LOCATION,
+                            ),
+                        )
                         LocationPrompt.GpsOff -> {
                             context.openLocationSettings()
                             onIntent(CreateReviewIntent.DismissLocationPrompt)
@@ -76,6 +98,17 @@ private fun LocationPrompt.content() = when (this) {
         PromptContent(R.string.ubic_gps_titulo, R.string.ubic_gps_cuerpo, R.string.ubic_gps_activar)
     LocationPrompt.Timeout ->
         PromptContent(R.string.ubic_timeout_titulo, R.string.ubic_timeout_cuerpo, R.string.ubic_reintentar)
+}
+
+private fun Context.canAskLocationAgain(): Boolean {
+    val activity = findActivity() ?: return false
+    return ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_FINE_LOCATION)
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 private fun Context.openAppSettings() = startActivity(

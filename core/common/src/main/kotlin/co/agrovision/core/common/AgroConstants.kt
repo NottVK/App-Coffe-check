@@ -44,7 +44,7 @@ object AgroConstants {
          * datos es la descarga del modelo, y esa solo ocurre cuando hay una versión nueva. Por eso
          * un modelo corregido llega en minutos y no al día siguiente (y un kill-switch igual).
          */
-        val UPDATE_CHECK_INTERVAL: Duration = 15.minutes
+        val UPDATE_CHECK_INTERVAL: Duration = 1.minutes
 
         /** Presupuesto de latencia p95 en el dispositivo de referencia
          *  (Snapdragon 680, 4 GB). Por encima, el productor percibe la app como

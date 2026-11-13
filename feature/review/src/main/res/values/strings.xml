@@ -61,8 +61,8 @@
     <string name="ubic_lote_cuerpo">Si sigues en el lote, confirma y tomaremos tu ubicación ahora. Si ya te fuiste, vuelve al lote y toma la foto de nuevo.</string>
     <string name="ubic_lote_confirmar">Sigo en el lote</string>
     <string name="ubic_permiso_titulo">Falta el permiso de ubicación</string>
-    <string name="ubic_permiso_cuerpo">El agrónomo necesita saber en qué lote está la planta. Activa el permiso de ubicación precisa para AgroVisión en los ajustes del teléfono.</string>
-    <string name="ubic_abrir_ajustes">Abrir ajustes</string>
+    <string name="ubic_permiso_cuerpo">El agrónomo necesita saber en qué lote está la planta. Toca «Permitir» y acepta el permiso de ubicación precisa.</string>
+    <string name="ubic_abrir_ajustes">Permitir</string>
     <string name="ubic_gps_titulo">Activa el GPS</string>
     <string name="ubic_gps_cuerpo">El GPS está apagado. Actívalo para tomar la ubicación exacta de tu cafetal y vuelve a enviar.</string>
     <string name="ubic_gps_activar">Activar GPS</string>

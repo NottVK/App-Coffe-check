@@ -62,12 +62,17 @@ class CheckModelUpdateUseCaseTest {
         installedAtEpochMillis = 0L,
     )
 
-    private fun stateWith(activeVersion: String?) = ModelRegistryState(
+    private fun stateWith(
+        activeVersion: String?,
+        lastCheckEpochMillis: Long = 0L,
+        consecutiveFailures: Int = 0,
+    ) = ModelRegistryState(
         activeSlot = ModelSlot.A,
         active = activeVersion?.let(::installed),
         standby = null,
-        lastCheckEpochMillis = 0L,
+        lastCheckEpochMillis = lastCheckEpochMillis,
         lastFailure = null,
+        consecutiveFailures = consecutiveFailures,
     )
 
     /** A mano porque MockK no sabe devolver `AgroResult` genérico. */
@@ -126,5 +131,32 @@ class CheckModelUpdateUseCaseTest {
         val result = useCase(FakeRegistry(stateWith("1.0.0"), AgroResult.success(offered)))()
 
         assertEquals(ModelUpdateDecision.Available(offered), (result as AgroResult.Success).value)
+    }
+
+    @Test
+    fun `tras un fallo reciente la busqueda automatica espera`() = runTest {
+        val registry = FakeRegistry(
+            stateWith(null, lastCheckEpochMillis = 10_000_000_000L - 30_000L, consecutiveFailures = 1),
+            AgroResult.success(manifest("2.0.0")),
+        )
+
+        val result = useCase(registry)()
+
+        assertEquals(ModelUpdateDecision.UpToDate, (result as AgroResult.Success).value)
+        assertEquals(0, registry.checks)
+    }
+
+    @Test
+    fun `la busqueda manual ignora la espera por fallos y ve la version nueva`() = runTest {
+        val offered = manifest("2.0.0")
+        val registry = FakeRegistry(
+            stateWith(null, lastCheckEpochMillis = 10_000_000_000L - 30_000L, consecutiveFailures = 1),
+            AgroResult.success(offered),
+        )
+
+        val result = useCase(registry)(force = true)
+
+        assertEquals(ModelUpdateDecision.Available(offered), (result as AgroResult.Success).value)
+        assertEquals(1, registry.checks)
     }
 }

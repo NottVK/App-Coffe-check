@@ -114,7 +114,7 @@ class SyncScheduler @Inject constructor(
 
         /** Retraso inicial: al abrir la app, primero sube lo pendiente; el modelo
          *  puede esperar unos minutos y no compite por el mismo ancho de banda. */
-        const val MODEL_CHECK_DELAY_MINUTES = 5L
-        const val MODEL_BACKOFF_MINUTES = 30L
+        const val MODEL_CHECK_DELAY_MINUTES = 1L
+        const val MODEL_BACKOFF_MINUTES = 1L
     }
 }
