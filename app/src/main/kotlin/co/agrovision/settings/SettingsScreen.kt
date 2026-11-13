@@ -1,5 +1,6 @@
 package co.agrovision.settings
 
+import android.os.Build
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -65,6 +66,17 @@ fun SettingsScreen(
     val locationLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { granted -> viewModel.setLocationEnabled(granted.values.any { it }) }
+
+    // Desde Android 13 las notificaciones también necesitan permiso: el interruptor se enciende
+    // solo si el sistema lo concede.
+    val notificationsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted -> viewModel.setNotifications(granted) }
+
+    fun hasNotificationPermission() =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
 
     fun hasLocationPermission() =
         ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) ==
@@ -168,7 +180,12 @@ fun SettingsScreen(
                 text = stringResource(R.string.ajustes_notificaciones),
                 supporting = stringResource(R.string.ajustes_notificaciones_ayuda),
                 checked = preferences.notificationsEnabled,
-                onCheckedChange = viewModel::setNotifications,
+                onCheckedChange = { enabled ->
+                    when {
+                        !enabled || hasNotificationPermission() -> viewModel.setNotifications(enabled)
+                        else -> notificationsLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                },
             )
         }
 

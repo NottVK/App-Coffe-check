@@ -1,5 +1,11 @@
 package co.agrovision.feature.scan.camera
 
+import androidx.core.app.ActivityCompat
+import android.provider.Settings
+import android.net.Uri
+import android.content.Intent
+import android.content.ContextWrapper
+import android.app.Activity
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -95,10 +101,16 @@ fun CameraCapture(
     val context = LocalContext.current
     var hasPermission by remember { mutableStateOf(context.hasCameraPermission()) }
     var permissionRequested by remember { mutableStateOf(false) }
+    // Solo el botón lleva a Ajustes; el pedido automático al entrar nunca expulsa de la pantalla
+    var fromButton by remember { mutableStateOf(false) }
 
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { granted -> hasPermission = granted }
+    ) { granted ->
+        hasPermission = granted
+        if (!granted && fromButton && !context.canAskCameraAgain()) context.openAppSettings()
+        fromButton = false
+    }
 
     LaunchedEffect(Unit) {
         if (!hasPermission && !permissionRequested) {
@@ -119,7 +131,10 @@ fun CameraCapture(
                 PrimaryFieldButton(
                     text = stringResource(R.string.camara_permitir),
                     icon = Icons.Filled.PhotoCamera,
-                    onClick = { launcher.launch(Manifest.permission.CAMERA) },
+                    onClick = {
+                        fromButton = true
+                        launcher.launch(Manifest.permission.CAMERA)
+                    },
                 )
             },
         )
@@ -358,6 +373,22 @@ private fun GuidanceLabel(guidance: FramingGuidance, hint: String?) {
             .padding(horizontal = 20.dp, vertical = 12.dp),
     )
 }
+
+private fun Context.canAskCameraAgain(): Boolean {
+    val activity = findActivity() ?: return false
+    return ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.CAMERA)
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
+private fun Context.openAppSettings() = startActivity(
+    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null))
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+)
 
 private fun Context.hasCameraPermission(): Boolean =
     ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==

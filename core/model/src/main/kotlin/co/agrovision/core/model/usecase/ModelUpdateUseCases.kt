@@ -32,17 +32,19 @@ class CheckModelUpdateUseCase @Inject constructor(
         val state = registry.currentState()
         val now = clock.nowEpochMillis()
 
-        // No más de una comprobación cada 24 h (§8.3). Más frecuente gasta datos
-        // prepago sin aportar frescura útil.
+        // Entre comprobaciones pasa un intervalo corto: la consulta del manifiesto pesa menos de 1 KB.
+        // La búsqueda manual (`force`) lo ignora.
         val elapsed = now - state.lastCheckEpochMillis
         if (!force && elapsed < AgroConstants.Model.UPDATE_CHECK_INTERVAL.inWholeMilliseconds) {
             return AgroResult.success(ModelUpdateDecision.UpToDate)
         }
 
-        // Si las últimas actualizaciones fallaron (firma, integridad, prueba de humo), repetirlas cada
-        // 15 minutos redescargaría ~5 MB una y otra vez con datos del productor. El espera crece
-        // al doble por cada fallo seguido, hasta un día, y vale también cuando no hay modelo.
-        if (state.consecutiveFailures > 0 && elapsed < failureCooldownMillis(state.consecutiveFailures)) {
+        // Si las últimas actualizaciones fallaron (firma, integridad, prueba de humo), repetirlas sin
+        // pausa redescargaría ~5 MB una y otra vez con datos del productor. La espera crece al doble
+        // por cada fallo seguido, hasta un día, y vale también cuando no hay modelo. La búsqueda
+        // manual la ignora: si el productor pide buscar, se consulta de verdad; responderle
+        // «ya tienes la última» por una espera interna le oculta que no tiene modelo.
+        if (!force && state.consecutiveFailures > 0 && elapsed < failureCooldownMillis(state.consecutiveFailures)) {
             return AgroResult.success(ModelUpdateDecision.UpToDate)
         }
 
