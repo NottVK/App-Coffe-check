@@ -9,6 +9,7 @@ import co.agrovision.core.model.port.CatalogCursor
 import co.agrovision.core.model.port.PestCatalogRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -22,6 +23,7 @@ import retrofit2.http.Query
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -75,9 +77,12 @@ class CatalogSync @Inject constructor(
             if (!response.isSuccessful || delta == null) return@withContext false
             val merged = mutableListOf<PestTaxon>()
             for (pest in delta.upserted) {
+                // Las descargas son bloqueantes: entre ficha y ficha se atiende la cancelación del worker.
+                coroutineContext.ensureActive()
                 val old = catalog.findById(pest.id)?.imageRefs.orEmpty()
                 val refs = if (pest.images.isEmpty()) old else {
-                    val downloaded = pest.images.map { images.download(it) }
+                    // Tope por ficha: un delta no puede llenar el almacenamiento a fuerza de URLs.
+                    val downloaded = pest.images.take(MAX_IMAGES_PER_PEST).map { images.download(it) }
                     // No avanzar el cursor: el servidor debe reenviar el mismo delta.
                     if (downloaded.any { it == null }) return@withContext false
                     downloaded.filterNotNull()
@@ -93,18 +98,23 @@ class CatalogSync @Inject constructor(
         } catch (_: kotlinx.serialization.SerializationException) { false
         } catch (_: IllegalArgumentException) { false }
     }
+
+    private companion object { const val MAX_IMAGES_PER_PEST = 10 }
 }
 
-/** Cliente público dedicado, sin interceptores ni redirecciones automáticas. */
+/** Cliente público dedicado, sin interceptores ni redirecciones automáticas. `callTimeout` acota la
+ *  descarga completa: un servidor que gotea bytes no retiene el worker indefinidamente. */
 internal class CatalogImageDownloader(private val directory: File, private val allowLocalHttp: Boolean,
-    private val client: OkHttpClient = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).build()) {
+    private val client: OkHttpClient = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
+        .callTimeout(CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS).build()) {
     fun download(raw: String): String? {
         val url = raw.toHttpUrlOrNull() ?: return null
         if (url.scheme != "https" && !(allowLocalHttp && url.scheme == "http" && url.host in setOf("localhost", "10.0.2.2"))) return null
         val hash = MessageDigest.getInstance("SHA-256").digest(raw.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it.toInt() and 255) }
         for (ext in listOf("jpg", "png", "webp")) {
             val existing = File(directory, "$hash.$ext")
-            if (existing.isFile) return existing.absolutePath
+            // Una imagen truncada en caché (de antes de esta validación) se descarta y se vuelve a pedir.
+            if (existing.isFile) { if (isComplete(ext, existing)) return existing.absolutePath else existing.delete() }
         }
         if (!directory.exists() && !directory.mkdirs() && !directory.isDirectory) return null
         var temp: File? = null
@@ -122,7 +132,7 @@ internal class CatalogImageDownloader(private val directory: File, private val a
                     while (true) { val n = input.read(buffer); if (n < 0) break; total += n; if (total > MAX_BYTES) return null; output.write(buffer, 0, n) }
                 } }
                 val signature = file.inputStream().use { input -> ByteArray(12).let { bytes -> val n = input.read(bytes); bytes.copyOf(n.coerceAtLeast(0)) } }
-                if (!validSignature(ext, signature)) return null
+                if (!validSignature(ext, signature) || !isComplete(ext, file)) return null
                 val target = File(directory, "$hash.$ext")
                 if (!file.renameTo(target)) return null
                 return target.absolutePath
@@ -138,5 +148,24 @@ internal class CatalogImageDownloader(private val directory: File, private val a
         "webp" -> b.size >= 12 && String(b, 0, 4, Charsets.US_ASCII) == "RIFF" && String(b, 8, 4, Charsets.US_ASCII) == "WEBP"
         else -> false
     }
-    companion object { private const val MAX_BYTES = 5L * 1024 * 1024 }
+    /** La cabecera sola admite archivos truncados; se exige también el cierre del formato. */
+    private fun isComplete(ext: String, file: File): Boolean {
+        val length = file.length()
+        if (length < 12) return ext == "jpg" && length >= 4 && tail(file, 2).contentEquals(byteArrayOf(0xff.toByte(), 0xd9.toByte()))
+        return when (ext) {
+            "jpg" -> tail(file, 2).contentEquals(byteArrayOf(0xff.toByte(), 0xd9.toByte()))
+            "png" -> tail(file, 8).contentEquals(byteArrayOf(0x49, 0x45, 0x4e, 0x44, 0xae.toByte(), 0x42, 0x60, 0x82.toByte()))
+            "webp" -> java.io.RandomAccessFile(file, "r").use { raf ->
+                raf.seek(4); val b = ByteArray(4); raf.readFully(b)
+                val riffSize = (b[0].toLong() and 255) or ((b[1].toLong() and 255) shl 8) or
+                    ((b[2].toLong() and 255) shl 16) or ((b[3].toLong() and 255) shl 24)
+                riffSize + 8 == length
+            }
+            else -> false
+        }
+    }
+    private fun tail(file: File, n: Int): ByteArray = java.io.RandomAccessFile(file, "r").use { raf ->
+        raf.seek(file.length() - n); ByteArray(n).also { raf.readFully(it) }
+    }
+    companion object { private const val MAX_BYTES = 5L * 1024 * 1024; private const val CALL_TIMEOUT_SECONDS = 120L }
 }

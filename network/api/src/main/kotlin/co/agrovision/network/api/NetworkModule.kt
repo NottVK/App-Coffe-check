@@ -91,6 +91,10 @@ object NetworkModule {
         // mecanismos de reintento superpuestos multiplican el consumo de datos
         // sin mejorar la tasa de éxito.
         .retryOnConnectionFailure(false)
+        // Una redirección no puede cambiar de esquema: evita que una respuesta
+        // 3xx degrade HTTPS a HTTP (fotos, coordenadas) en API 22-23, donde la
+        // configuración de seguridad de red no aplica.
+        .followSslRedirects(false)
         .addInterceptor(deviceIdInterceptor)
         .addInterceptor(integrityInterceptor)
         .addInterceptor(authInterceptor)

@@ -85,10 +85,10 @@ class SettingsViewModel @Inject constructor(
         SettingsUiState(
             preferences = preferences,
             trainingConsent = current.trainingConsent,
-            consentNotSynced = unsynced.first,
+            consentNotSynced = unsynced.first || current.trainingRevocationPending,
             dataPolicyVersion = current.dataPolicyVersion,
             dataPolicyAcceptedAtEpochMillis = current.dataPolicyAcceptedAtEpochMillis,
-            policyNotSynced = unsynced.second,
+            policyNotSynced = unsynced.second || current.policyRevocationPending,
             model = check.copy(
                 activeVersion = registryState.active?.version,
                 installedAtEpochMillis = registryState.active?.installedAtEpochMillis ?: 0L,

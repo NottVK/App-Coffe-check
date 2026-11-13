@@ -30,6 +30,7 @@ import okhttp3.mockwebserver.MockWebServer
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.io.File
@@ -132,6 +133,28 @@ class RetrofitSyncGatewayTest {
         assertEquals(AgroResult.unit, result)
         assertEquals("PUT", request.method)
         assertNull(request.getHeader("Authorization"))
+        photo.delete()
+    }
+
+    @Test
+    fun `con la API en HTTPS una URL de subida HTTP se rechaza sin enviar la foto`() = runBlocking<Unit> {
+        val client = OkHttpClient()
+        val httpsBase = "https://api.example/api/"
+        val retrofit = retrofit2.Retrofit.Builder().baseUrl(httpsBase).client(client)
+            .addConverterFactory(Json.asConverterFactory("application/json".toMediaType())).build()
+        val httpsGateway = RetrofitSyncGateway(
+            api = retrofit.create(AgroVisionApiService::class.java),
+            publicApi = retrofit.create(PublicApiService::class.java),
+            client = client,
+            baseUrl = httpsBase,
+            io = Dispatchers.Unconfined,
+        )
+        val photo = File.createTempFile("foto", ".jpg").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+
+        val result = httpsGateway.uploadImage(storage.url("/bucket/img-1").toString(), photo.path)
+
+        assertTrue(result is AgroResult.Failure)
+        assertEquals(0, storage.requestCount)
         photo.delete()
     }
 

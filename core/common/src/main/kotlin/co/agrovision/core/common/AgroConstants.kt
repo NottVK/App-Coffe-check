@@ -50,6 +50,14 @@ object AgroConstants {
          *  (Snapdragon 680, 4 GB). Por encima, el productor percibe la app como
          *  rota (§3.2 RNF). */
         val LATENCY_BUDGET: Duration = 900.milliseconds
+
+        /**
+         * Techos LOCALES de descarga OTA. `sizeBytes` del manifiesto no basta: viene
+         * del servidor y nada lo firma. El .tflite float32 actual ronda 16 MB; el
+         * JSON de calibración lleva una matriz d×d que con d=1280 ronda los 20 MB.
+         */
+        const val MAX_MODEL_BYTES: Long = 64L * 1024 * 1024
+        const val MAX_ARTIFACT_JSON_BYTES: Long = 32L * 1024 * 1024
     }
 
     object Sync {

@@ -12,6 +12,8 @@ import co.agrovision.core.model.port.AppVersionProvider
 import co.agrovision.core.model.port.Clock
 import co.agrovision.core.model.port.ModelRegistryRepository
 import co.agrovision.core.model.port.TelemetryRecorder
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 
 /**
@@ -119,8 +121,23 @@ class ActivateModelUseCase @Inject constructor(
     private val telemetry: TelemetryRecorder,
 ) {
 
-    suspend operator fun invoke(manifest: ModelManifest): AgroResult<Unit, DomainError> {
+    /**
+     * La búsqueda manual (Ajustes), el worker y el sondeo de primer plano pueden
+     * coincidir. Sin exclusión, dos instalaciones compartirían `staging/` y la
+     * misma ranura inactiva, y una podría sobrescribir la ranura que la otra
+     * acaba de activar. Todo el procedimiento corre bajo [ModelUpdateLock].
+     */
+    suspend operator fun invoke(manifest: ModelManifest): AgroResult<Unit, DomainError> =
+        ModelUpdateLock.withLock { install(manifest) }
+
+    private suspend fun install(manifest: ModelManifest): AgroResult<Unit, DomainError> {
         val previous = registry.currentState().active?.version
+
+        // Quien esperaba el cerrojo pudo decidir con un estado ya viejo: si otra
+        // instalación dejó activa esta versión (o una posterior), no hay nada que hacer.
+        val offered = SemanticVersion.parseOrNull(manifest.version)
+        val active = previous?.let(SemanticVersion::parseOrNull)
+        if (offered != null && active != null && active >= offered) return AgroResult.unit
 
         return registry.installToStandby(manifest)
             .flatMap { installed -> registry.activate(installed.slot) }
@@ -143,5 +160,17 @@ class ActivateModelUseCase @Inject constructor(
 class RollBackModelUseCase @Inject constructor(
     private val registry: ModelRegistryRepository,
 ) {
-    suspend operator fun invoke(): AgroResult<Unit, DomainError> = registry.rollBack()
+    suspend operator fun invoke(): AgroResult<Unit, DomainError> =
+        ModelUpdateLock.withLock { registry.rollBack() }
+}
+
+/**
+ * Exclusión de proceso para instalar, activar y revertir modelos. Es un objeto y
+ * no un singleton inyectado por la misma razón que el cerrojo de
+ * [SyncPendingUseCase]: los casos de uso no tienen ámbito y cada inyección es una
+ * instancia nueva.
+ */
+internal object ModelUpdateLock {
+    private val mutex = Mutex()
+    suspend fun <T> withLock(block: suspend () -> T): T = mutex.withLock { block() }
 }

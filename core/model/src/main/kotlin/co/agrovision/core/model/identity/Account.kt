@@ -58,6 +58,11 @@ data class Account(
      *  prueba de la autorización. `null` si no ha aceptado o la revocó. */
     val dataPolicyVersion: String? = null,
     val dataPolicyAcceptedAtEpochMillis: Long? = null,
+    /** Revocaciones aplicadas en el teléfono que el servidor aún no confirmó. Se
+     *  guardan para reintentarlas al sincronizar y para que la interfaz siga
+     *  avisando aunque se cierre la app. */
+    val trainingRevocationPending: Boolean = false,
+    val policyRevocationPending: Boolean = false,
 ) {
     /** Falta aceptar la política vigente (nunca la aceptó, la revocó, o cambió
      *  de versión). Se pide una vez, al enviar una solicitud; no en cada envío. */

@@ -115,6 +115,15 @@ class RetrofitSyncGateway @Inject constructor(
             ?: return@withContext AgroResult.failure(
                 DomainError.RemoteFailure(0, "URL de subida inválida")
             )
+        // Con una API en HTTPS (release), la foto tampoco puede salir en claro,
+        // aunque el servidor devuelva una URL `http://`. La configuración de
+        // seguridad de red no cubre API 22-23, así que se comprueba aquí. Solo
+        // contra un backend local en HTTP (depuración) se admite HTTP.
+        if (!url.isHttps && apiBase.isHttps) {
+            return@withContext AgroResult.failure(
+                DomainError.RemoteFailure(0, "URL de subida sin HTTPS")
+            )
+        }
 
         try {
             val call = client.newCall(

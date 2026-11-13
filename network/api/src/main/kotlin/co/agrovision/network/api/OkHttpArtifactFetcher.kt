@@ -10,6 +10,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.OutputStream
 import javax.inject.Inject
@@ -85,19 +86,17 @@ class OkHttpArtifactFetcher @Inject constructor(
         }
     }
 
-    override suspend fun fetchText(url: String): AgroResult<String, DomainError> = withContext(io) {
-        try {
-            client.newCall(Request.Builder().url(url).get().build()).execute().use { response ->
-                if (!response.isSuccessful) {
-                    AgroResult.failure(DomainError.RemoteFailure(response.code, response.message))
-                } else {
-                    // `labels.json` y `calibration.json` son de kilobytes; leerlos
-                    // enteros es correcto aquí y sería un error con el .tflite.
-                    AgroResult.success(response.body?.string().orEmpty())
-                }
-            }
-        } catch (error: IOException) {
-            AgroResult.failure(DomainError.NoConnection)
+    override suspend fun fetchText(
+        url: String,
+        maxBytes: Long,
+    ): AgroResult<String, DomainError> = withContext(io) {
+        // Se leen enteros a memoria (hacen falta para la firma), pero con el mismo
+        // tope en flujo que `fetch`: sin él, una respuesta enorme agota la memoria
+        // antes de que la firma pueda rechazarla.
+        val buffer = ByteArrayOutputStream()
+        when (val result = fetch(url, buffer, maxBytes)) {
+            is AgroResult.Failure -> result
+            is AgroResult.Success -> AgroResult.success(buffer.toString(Charsets.UTF_8.name()))
         }
     }
 

@@ -57,6 +57,8 @@ class AccountStore @Inject constructor(
             updated.validatedAtEpochMillis?.let { preferences[Keys.VALIDATED_AT] = it }
             preferences[Keys.TRAINING_CONSENT] = updated.trainingConsent
             preferences[Keys.SESSION_EXPIRED] = updated.sessionExpired
+            preferences[Keys.TRAINING_REVOCATION_PENDING] = updated.trainingRevocationPending
+            preferences[Keys.POLICY_REVOCATION_PENDING] = updated.policyRevocationPending
             updated.coffeeVariety?.let { preferences[Keys.COFFEE_VARIETY] = it.name }
             updated.plantingAge?.let { preferences[Keys.PLANTING_AGE] = it.name }
             // A diferencia del resto, estos dos se pueden borrar: revocar la política
@@ -92,6 +94,8 @@ class AccountStore @Inject constructor(
             ?.let { name -> PlantingAge.entries.firstOrNull { it.name == name } },
         dataPolicyVersion = preferences[Keys.DATA_POLICY_VERSION],
         dataPolicyAcceptedAtEpochMillis = preferences[Keys.DATA_POLICY_AT],
+        trainingRevocationPending = preferences[Keys.TRAINING_REVOCATION_PENDING] ?: false,
+        policyRevocationPending = preferences[Keys.POLICY_REVOCATION_PENDING] ?: false,
     )
 
     private object Keys {
@@ -110,5 +114,8 @@ class AccountStore @Inject constructor(
         val DATA_POLICY_VERSION = stringPreferencesKey("account_data_policy_version")
         val DATA_POLICY_AT = longPreferencesKey("account_data_policy_at")
         val DEVICE_ID = stringPreferencesKey("device_id")
+        // Claves nuevas: su ausencia equivale a `false`, así que no hace falta migración.
+        val TRAINING_REVOCATION_PENDING = booleanPreferencesKey("account_training_revocation_pending")
+        val POLICY_REVOCATION_PENDING = booleanPreferencesKey("account_policy_revocation_pending")
     }
 }

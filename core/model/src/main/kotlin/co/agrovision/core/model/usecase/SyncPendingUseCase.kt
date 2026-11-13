@@ -19,6 +19,7 @@ import co.agrovision.core.model.port.UploadOutcome
 import co.agrovision.core.model.port.UploadStatus
 import co.agrovision.core.model.review.ReviewRequest
 import co.agrovision.core.model.review.ReviewStatus
+import co.agrovision.core.model.settings.UserPreferences
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.math.min
@@ -64,6 +65,10 @@ class SyncPendingUseCase @Inject constructor(
         val status = connectivity.current()
         if (!status.isOnline) return AgroResult.failure(DomainError.NoConnection)
 
+        // Una revocación que no llegó al servidor (sin red, sesión vencida) se
+        // reintenta antes que nada: pesa unos bytes y no depende de la compuerta.
+        account.retryPendingRevocations()
+
         // ADR-008: la decisión sobre el gasto de datos le corresponde a quien lo
         // paga. No se impone red no medida; se respeta lo que el productor eligió.
         val preferences = settings.current()
@@ -105,8 +110,7 @@ class SyncPendingUseCase @Inject constructor(
             captureBatch.forEach { captures.updateSyncState(it.id, SyncState.UPLOADING) }
             // La coordenada exacta de una captura solo sale con el consentimiento específico de ubicación
             // (el mismo que protege las solicitudes de revisión). Sin él viaja aproximada, ~1 km.
-            val shareExact = preferences.locationShareConsentAtEpochMillis != null
-            val outgoingCaptures = if (shareExact) captureBatch
+            val outgoingCaptures = if (shareExact(preferences)) captureBatch
             else captureBatch.map { capture -> capture.copy(location = capture.location?.coarsened()) }
             when (val result = gateway.uploadCaptures(outgoingCaptures)) {
                 is AgroResult.Failure -> {
@@ -149,7 +153,11 @@ class SyncPendingUseCase @Inject constructor(
                         )
                     }
                 }
-                is AgroResult.Success -> uploaded += reconcileCaptures(captureBatch, result.value, now)
+                is AgroResult.Success -> {
+                    val reconciled = reconcileCaptures(captureBatch, result.value, now)
+                    uploaded += reconciled.first
+                    failed += reconciled.second
+                }
             }
         }
 
@@ -157,8 +165,14 @@ class SyncPendingUseCase @Inject constructor(
         // Una solicitud sin coordenada exacta (filas anteriores a esta regla, o sin
         // GPS) no se envía: el servidor la rechazaría y una aproximada no puede
         // hacerse pasar por exacta. Queda en cola, sin perderse.
-        val (reviewBatch, withoutExactLocation) = reviews
-            .nextBatchToUpload(AgroConstants.Sync.BATCH_SIZE, now)
+        val candidates = reviews.nextBatchToUpload(AgroConstants.Sync.BATCH_SIZE, now)
+        // La solicitud lleva la coordenada exacta, así que solo sale con el
+        // consentimiento de ubicación VIGENTE al enviar, no el que había al
+        // crearla: si el productor lo revocó con la solicitud aún en cola, se
+        // retiene sin gastar reintentos hasta que lo vuelva a autorizar.
+        val consented = shareExact(preferences)
+        if (!consented) candidates.forEach { holdForLocationConsent(it) }
+        val (reviewBatch, withoutExactLocation) = (if (consented) candidates else emptyList())
             .partition { it.location?.isExact == true }
         withoutExactLocation.forEach { holdForExactLocation(it, now) }
         if (reviewBatch.isNotEmpty()) {
@@ -270,9 +284,10 @@ class SyncPendingUseCase @Inject constructor(
         batch: List<co.agrovision.core.model.capture.Capture>,
         outcomes: List<UploadOutcome>,
         now: Long,
-    ): Int {
+    ): Pair<Int, Int> {
         val byId = outcomes.associateBy { it.localId }
         var uploaded = 0
+        var failed = 0
 
         batch.forEach { capture ->
             when (val outcome = byId[capture.id]) {
@@ -283,18 +298,35 @@ class SyncPendingUseCase @Inject constructor(
                     nextAttemptAtEpochMillis = now + backoffMillis(capture.sync.attempts),
                 )
 
+                // ACCEPTED, o DUPLICATE (idempotencia funcionando: el servidor ya
+                // tenía los metadatos). En ambos casos, si trae URL es que al
+                // servidor le falta la foto, y la captura solo pasa a UPLOADED
+                // cuando esa foto llegó: marcarla antes permitiría purgar la
+                // única copia de una imagen que nunca salió del teléfono.
                 else -> when (outcome.status) {
-                    UploadStatus.ACCEPTED -> {
-                        outcome.presignedImageUrl?.let { url ->
-                            gateway.uploadImage(url, capture.imagePath)
+                    UploadStatus.ACCEPTED, UploadStatus.DUPLICATE -> {
+                        val image = outcome.presignedImageUrl
+                            ?.let { url -> gateway.uploadImage(url, capture.imagePath) }
+                        if (image is AgroResult.Failure) {
+                            // El serverId se guarda: el reintento llegará como DUPLICATE.
+                            val sessionExpired = image.error == DomainError.NotSignedIn
+                            if (!sessionExpired) failed++
+                            captures.updateSyncState(
+                                id = capture.id,
+                                state = if (sessionExpired) SyncState.PENDING else retryStateFor(capture.sync.attempts),
+                                serverId = outcome.serverId,
+                                error = "Foto: ${describe(image.error)}",
+                                nextAttemptAtEpochMillis = if (sessionExpired) {
+                                    capture.sync.nextAttemptAtEpochMillis
+                                } else {
+                                    now + backoffMillis(capture.sync.attempts)
+                                },
+                                countsAsAttempt = !sessionExpired,
+                            )
+                        } else {
+                            captures.updateSyncState(capture.id, SyncState.UPLOADED, outcome.serverId)
+                            uploaded++
                         }
-                        captures.updateSyncState(capture.id, SyncState.UPLOADED, outcome.serverId)
-                        uploaded++
-                    }
-                    // Idempotencia funcionando: el servidor ya lo tenía.
-                    UploadStatus.DUPLICATE -> {
-                        captures.updateSyncState(capture.id, SyncState.UPLOADED, outcome.serverId)
-                        uploaded++
                     }
                     // Rechazo definitivo: reintentar no cambiaría nada, y dejarla
                     // en PENDING la haría reintentarse para siempre.
@@ -306,7 +338,7 @@ class SyncPendingUseCase @Inject constructor(
                 }
             }
         }
-        return uploaded
+        return uploaded to failed
     }
 
     /**
@@ -427,6 +459,20 @@ class SyncPendingUseCase @Inject constructor(
             nextAttemptAtEpochMillis = now + AgroConstants.Sync.MAX_BACKOFF.inWholeMilliseconds,
         )
 
+    /** Consentimiento revocado: la solicitud espera, visible y sin gastar reintentos,
+     *  a que el productor vuelva a autorizar compartir la ubicación exacta. */
+    private suspend fun holdForLocationConsent(review: ReviewRequest) =
+        reviews.updateSyncState(
+            id = review.id,
+            state = SyncState.PENDING,
+            error = LOCATION_CONSENT_HOLD_MESSAGE,
+            nextAttemptAtEpochMillis = review.sync.nextAttemptAtEpochMillis,
+            countsAsAttempt = false,
+        )
+
+    private fun shareExact(preferences: UserPreferences): Boolean =
+        preferences.locationShareConsentAtEpochMillis != null
+
     private suspend fun retryReview(
         review: ReviewRequest,
         error: String,
@@ -491,6 +537,8 @@ class SyncPendingUseCase @Inject constructor(
         const val EXACT_LOCATION_REQUIRED_CODE = "ubicacion_exacta_requerida"
         const val EXACT_LOCATION_HOLD_MESSAGE =
             "Falta la ubicación exacta de la foto. Toma la foto de nuevo en el lote para enviarla."
+        const val LOCATION_CONSENT_HOLD_MESSAGE =
+            "Retiraste el permiso de compartir la ubicación exacta. Autorízalo de nuevo para enviar esta solicitud."
         val running = Mutex()
     }
 }

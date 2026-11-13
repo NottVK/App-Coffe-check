@@ -40,8 +40,10 @@ class SyncWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         catalogSeeder.seedIfEmpty()
-        val catalogOk = catalogSync.sync()
+        // La cola del productor va primero: un catálogo lento o enorme no puede
+        // retrasar las solicitudes de revisión que alguien está esperando.
         val outcome = syncPending(SyncTrigger.WORKER)
+        val catalogOk = catalogSync.sync()
 
         // La purga corre tras una sincronización con éxito, no antes: borrar
         // capturas cuya subida todavía no se ha confirmado sería perder trabajo

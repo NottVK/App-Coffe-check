@@ -104,7 +104,7 @@ class CatalogSyncTest {
             assertFalse(sync.sync())
             assertEquals(old, row); assertEquals(CatalogCursor(null, null), cursor)
             server.enqueue(MockResponse().setBody(body))
-            server.enqueue(MockResponse().setHeader("Content-Type", "image/jpeg").setBody(Buffer().write(byteArrayOf(0xff.toByte(), 0xd8.toByte(), 0xff.toByte()))))
+            server.enqueue(MockResponse().setHeader("Content-Type", "image/jpeg").setBody(Buffer().write(byteArrayOf(0xff.toByte(), 0xd8.toByte(), 0xff.toByte(), 0xd9.toByte()))))
             assertTrue(sync.sync())
             assertTrue(File(row.imageRefs.single()).isFile)
             assertEquals("Enfermedad_Roya", row.id); assertEquals(CatalogCursor(42, "v2"), cursor)
@@ -125,10 +125,18 @@ class CatalogSyncTest {
             server.enqueue(MockResponse().setHeader("Content-Type", "image/png").setBody(Buffer().write(ByteArray(5 * 1024 * 1024 + 1))))
             assertNull(downloader.download(url))
             val png = byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)
+            // Cabecera válida pero truncada (sin chunk IEND): no se acepta ni se cachea.
             server.enqueue(MockResponse().setHeader("Content-Type", "image/png").setBody(Buffer().write(png)))
+            assertNull(downloader.download(url))
+            val iend = byteArrayOf(0, 0, 0, 0, 0x49, 0x45, 0x4e, 0x44, 0xae.toByte(), 0x42, 0x60, 0x82.toByte())
+            server.enqueue(MockResponse().setHeader("Content-Type", "image/png").setBody(Buffer().write(png + iend)))
             val path = downloader.download(url)
-            assertNotNull(path); assertEquals(path, downloader.download(url)); assertEquals(4, server.requestCount)
-            downloader.clean(emptySet()); assertFalse(File(path!!).exists())
+            assertNotNull(path); assertEquals(path, downloader.download(url)); assertEquals(5, server.requestCount)
+            // Un archivo corrupto ya en caché se descarta y se vuelve a descargar.
+            File(path!!).writeBytes(png)
+            server.enqueue(MockResponse().setHeader("Content-Type", "image/png").setBody(Buffer().write(png + iend)))
+            assertEquals(path, downloader.download(url)); assertEquals(6, server.requestCount)
+            downloader.clean(emptySet()); assertFalse(File(path).exists())
         } finally { server.shutdown(); dir.deleteRecursively() }
     }
 }

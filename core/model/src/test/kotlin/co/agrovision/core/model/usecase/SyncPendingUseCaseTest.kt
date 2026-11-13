@@ -82,9 +82,11 @@ class SyncPendingUseCaseTest {
     private val account = mockk<AccountRepository>().also {
         coEvery { it.current() } answers { currentAccount }
         coJustRun { it.markSessionExpired() }
+        coJustRun { it.retryPendingRevocations() }
     }
     private val settings = mockk<SettingsRepository>().also {
-        coEvery { it.current() } returns UserPreferences.DEFAULT
+        // Las solicitudes llevan coordenada exacta: solo salen con el consentimiento vigente.
+        coEvery { it.current() } returns UserPreferences.DEFAULT.copy(locationShareConsentAtEpochMillis = 1L)
     }
     private val connectivity = mockk<ConnectivityMonitor>().also {
         every { it.current() } returns ConnectivityStatus(isOnline = true, isMetered = false)
@@ -407,6 +409,60 @@ class SyncPendingUseCaseTest {
         coVerify(exactly = 0) { reviews.updateSyncState(any(), SyncState.FAILED, any(), any(), any(), any()) }
     }
 
+    @Test
+    fun `revocado el consentimiento de ubicacion la solicitud en cola no se envia`() = runTest {
+        coEvery { settings.current() } returns UserPreferences.DEFAULT
+
+        val summary = runSync()
+
+        assertEquals(0, gateway.reviewUploadCalls)
+        assertEquals(0, summary.failed)
+        coVerify { reviews.updateSyncState("req-1", SyncState.PENDING, null, any(), any(), null, false) }
+        verifyNeverSubmitted()
+    }
+
+    // ── Foto de las capturas ─────────────────────────────────────────────────
+
+    @Test
+    fun `una captura aceptada cuya foto falla no se marca subida y conserva el serverId`() = runTest {
+        coEvery { captures.nextBatchToUpload(any(), any()) } returns listOf(capture(null))
+        coEvery { reviews.nextBatchToUpload(any(), any()) } returns emptyList()
+        coEvery { settings.current() } returns UserPreferences.DEFAULT.copy(trainingConsent = true)
+        gateway.captureOutcomes = listOf(captureOutcome(UploadStatus.ACCEPTED, "https://s3/c"))
+        gateway.failingUrls += "https://s3/c"
+
+        val summary = runSync()
+
+        assertEquals(0, summary.uploaded)
+        assertEquals(1, summary.failed)
+        coVerify(exactly = 0) { captures.updateSyncState("cap-1", SyncState.UPLOADED, any(), any(), any(), any()) }
+        coVerify {
+            captures.updateSyncState("cap-1", SyncState.PENDING, "srv-c", any(), any(), true)
+        }
+    }
+
+    @Test
+    fun `una captura duplicada con URL sube la foto que falta y queda subida`() = runTest {
+        coEvery { captures.nextBatchToUpload(any(), any()) } returns listOf(capture(null))
+        coEvery { reviews.nextBatchToUpload(any(), any()) } returns emptyList()
+        coEvery { settings.current() } returns UserPreferences.DEFAULT.copy(trainingConsent = true)
+        gateway.captureOutcomes = listOf(captureOutcome(UploadStatus.DUPLICATE, "https://s3/c"))
+
+        val summary = runSync()
+
+        assertEquals(listOf("https://s3/c" to "/fotos/c.jpg"), gateway.uploadedImages)
+        assertEquals(1, summary.uploaded)
+        coVerify { captures.updateSyncState("cap-1", SyncState.UPLOADED, "srv-c", any(), any(), any()) }
+    }
+
+    private fun captureOutcome(status: UploadStatus, url: String?) = UploadOutcome(
+        localId = "cap-1",
+        serverId = "srv-c",
+        status = status,
+        presignedImageUrl = url,
+        rejectionReason = null,
+    )
+
     private fun capture(location: GeoPoint?) = Capture(
         id = "cap-1",
         imagePath = "/fotos/c.jpg",
@@ -461,6 +517,7 @@ class SyncPendingUseCaseTest {
         var reviewUploadError: DomainError? = null
         var reviewUploadCalls = 0
         var captureUploadError: DomainError? = null
+        var captureOutcomes: List<UploadOutcome> = emptyList()
         val sentCaptures = mutableListOf<Capture>()
         var statuses: List<RemoteReviewStatus> = emptyList()
         var statusesError: DomainError? = null
@@ -480,7 +537,7 @@ class SyncPendingUseCaseTest {
             batch: List<Capture>,
         ): AgroResult<List<UploadOutcome>, DomainError> {
             sentCaptures += batch
-            return captureUploadError?.let { AgroResult.failure(it) } ?: AgroResult.success(emptyList())
+            return captureUploadError?.let { AgroResult.failure(it) } ?: AgroResult.success(captureOutcomes)
         }
 
         override suspend fun uploadImage(

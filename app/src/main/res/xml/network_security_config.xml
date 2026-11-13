@@ -41,11 +41,11 @@
         </trust-anchors>
     </debug-overrides>
 
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">10.0.2.2</domain>
-        <domain includeSubdomains="false">localhost</domain>
-        <domain includeSubdomains="false">10.4.16.82</domain>
-        <domain includeSubdomains="false">192.168.1.104</domain>
-    </domain-config>
+    <!--
+      Las excepciones de tráfico en claro hacia el backend local NO viven aquí:
+      un `domain-config` en `src/main` también llega a release. Están en
+      `src/debug/res/xml/network_security_config.xml`, que sustituye a este
+      archivo solo en la variante debug.
+    -->
 
 </network-security-config>

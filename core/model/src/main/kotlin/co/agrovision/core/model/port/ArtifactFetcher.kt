@@ -30,6 +30,8 @@ interface ArtifactFetcher {
         onProgress: (bytesRead: Long, totalBytes: Long) -> Unit = { _, _ -> },
     ): AgroResult<Long, DomainError>
 
-    /** Para `labels.json` y `calibration.json`, que son pequeños. */
-    suspend fun fetchText(url: String): AgroResult<String, DomainError>
+    /** Para `labels.json` y `calibration.json`. Se leen enteros a memoria antes de
+     *  verificar la firma, así que nunca más de [maxBytes]: una respuesta enorme
+     *  falla en lugar de agotar la memoria. */
+    suspend fun fetchText(url: String, maxBytes: Long): AgroResult<String, DomainError>
 }

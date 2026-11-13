@@ -240,6 +240,11 @@ interface AccountRepository {
      *  entrenamiento; si el servidor no se entera, se devuelve el error para que
      *  la interfaz no lo dé por hecho. */
     suspend fun revokeDataPolicy(): AgroResult<Unit, DomainError>
+
+    /** Reintenta avisar al servidor de las revocaciones que quedaron pendientes
+     *  (sin red o con la sesión vencida). Sin sesión no hace nada: se reintentan
+     *  en la siguiente sincronización. */
+    suspend fun retryPendingRevocations()
 }
 
 interface ModelRegistryRepository {

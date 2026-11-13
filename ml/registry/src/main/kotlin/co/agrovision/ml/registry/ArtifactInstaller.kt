@@ -1,6 +1,7 @@
 package co.agrovision.ml.registry
 
 import android.util.Log
+import co.agrovision.core.common.AgroConstants
 import co.agrovision.core.common.AgroDispatcher
 import co.agrovision.core.common.AgroResult
 import co.agrovision.core.common.Dispatcher
@@ -80,6 +81,13 @@ class ArtifactInstaller @Inject constructor(
                 "mantiene mapeada en memoria: sobrescribirla revienta en código nativo."
         }
 
+        // `sizeBytes` llega del manifiesto sin firmar: se acota con un techo local
+        // antes de tocar la red o el disco.
+        if (manifest.sizeBytes <= 0 || manifest.sizeBytes > AgroConstants.Model.MAX_MODEL_BYTES) {
+            Log.w(TAG, "Tamaño declarado fuera de rango: ${manifest.sizeBytes} bytes")
+            return@withContext AgroResult.failure(ModelUpdateFailure.INTEGRITY_MISMATCH)
+        }
+
         layout.clearStaging()
         val staged = File(layout.stagingDir(), "model.tflite")
 
@@ -106,8 +114,8 @@ class ArtifactInstaller @Inject constructor(
         }
 
         // ── Artefactos acompañantes ──
-        val labelsRaw = fetcher.fetchText(manifest.labelsUrl).valueOrNull()
-        val calibrationRaw = fetcher.fetchText(manifest.calibrationUrl).valueOrNull()
+        val labelsRaw = fetcher.fetchText(manifest.labelsUrl, MAX_JSON_BYTES).valueOrNull()
+        val calibrationRaw = fetcher.fetchText(manifest.calibrationUrl, MAX_JSON_BYTES).valueOrNull()
 
         if (labelsRaw == null) {
             staged.delete()
@@ -260,5 +268,6 @@ class ArtifactInstaller @Inject constructor(
     private companion object {
         const val TAG = "AgroVision.Registry"
         const val SHA_256 = "SHA-256"
+        const val MAX_JSON_BYTES = AgroConstants.Model.MAX_ARTIFACT_JSON_BYTES
     }
 }

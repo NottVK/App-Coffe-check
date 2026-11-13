@@ -4,7 +4,9 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.os.Build
+import androidx.core.content.ContextCompat
 import co.agrovision.core.common.AgroDispatcher
 import co.agrovision.core.common.Dispatcher
 import co.agrovision.core.common.UuidV7
@@ -169,7 +171,8 @@ private class AndroidConnectivityMonitor(
 ) : ConnectivityMonitor {
 
     private val manager: ConnectivityManager?
-        get() = context.getSystemService(ConnectivityManager::class.java)
+        // `Context.getSystemService(Class)` es API 23; ContextCompat cubre API 22.
+        get() = ContextCompat.getSystemService(context, ConnectivityManager::class.java)
 
     override fun observe(): Flow<ConnectivityStatus> = callbackFlow {
         val connectivity = manager
@@ -189,7 +192,23 @@ private class AndroidConnectivityMonitor(
         }
 
         trySend(current())
-        connectivity.registerDefaultNetworkCallback(callback)
+        val registered = runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                connectivity.registerDefaultNetworkCallback(callback)
+            } else {
+                // `registerDefaultNetworkCallback` es API 24. En API 22-23 se observa
+                // cualquier red con Internet y `current()` resuelve cuál es la activa.
+                val request = NetworkRequest.Builder()
+                    .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    .build()
+                connectivity.registerNetworkCallback(request, callback)
+            }
+        }.isSuccess
+        if (!registered) {
+            // Sin callback el flujo queda con la última lectura; mejor que tumbar al llamador.
+            awaitClose { }
+            return@callbackFlow
+        }
         awaitClose { runCatching { connectivity.unregisterNetworkCallback(callback) } }
     }.distinctUntilChanged()
 

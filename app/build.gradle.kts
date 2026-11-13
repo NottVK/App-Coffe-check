@@ -257,6 +257,23 @@ val verifyCertificatePins = tasks.register("verifyCertificatePins") {
                 """.trimMargin()
             )
         }
+
+        // Dos cadenas cualesquiera no bastan: OkHttp rechaza al construir el cliente un pin que no sea
+        // Base64 de un SHA-256, y uno duplicado no es un respaldo. Se exige formato y que sean distintos.
+        lista.forEach { pin ->
+            val bytes = runCatching { Base64.getDecoder().decode(pin) }.getOrNull()
+            if (bytes == null || bytes.size != 32) {
+                throw GradleException(
+                    "El pin «$pin» no es un SHA-256 en Base64 (32 bytes). Usa la salida del comando " +
+                        "openssl de arriba, sin el prefijo `sha256/`."
+                )
+            }
+        }
+        if (lista.toSet().size != lista.size) {
+            throw GradleException(
+                "agrovision.pinning.pins repite un pin: el de respaldo tiene que ser de OTRA clave."
+            )
+        }
     }
 }
 

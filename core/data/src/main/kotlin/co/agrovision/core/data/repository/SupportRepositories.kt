@@ -151,18 +151,26 @@ class AccountRepositoryImpl @Inject constructor(
      * siguientes instantáneas del dataset: si falla, se devuelve el error.
      */
     override suspend fun setTrainingConsent(granted: Boolean): AgroResult<Unit, DomainError> {
-        store.update { it.copy(trainingConsent = granted) }
-        if (tokens.accessToken() == null) {
+        // Otorgarlo de nuevo anula una revocación pendiente: lo último que eligió
+        // el productor es lo que vale.
+        store.update { it.copy(trainingConsent = granted, trainingRevocationPending = false) }
+        val result = if (tokens.accessToken() == null) {
             // Anónimo: el consentimiento solo existe en el teléfono. Registrado
             // con la sesión vencida: el servidor aún no lo sabe, y la interfaz
             // tiene que pedir que entre de nuevo en vez de darlo por hecho.
-            return if (store.current().tier == UserTier.T0_ANONIMO) {
-                AgroResult.unit
+            if (store.current().tier == UserTier.T0_ANONIMO) {
+                return AgroResult.unit
             } else {
                 AgroResult.failure(DomainError.NotSignedIn)
             }
+        } else {
+            expireSessionOn(gateway.setTrainingConsent(granted))
         }
-        return expireSessionOn(gateway.setTrainingConsent(granted))
+        // Una revocación que no llegó al servidor se persiste para reintentarla.
+        if (!granted && result is AgroResult.Failure) {
+            store.update { it.copy(trainingRevocationPending = true) }
+        }
+        return result
     }
 
     override suspend fun acceptDataPolicy(): AgroResult<Unit, DomainError> {
@@ -173,7 +181,11 @@ class AccountRepositoryImpl @Inject constructor(
             is AgroResult.Success -> {
                 val now = clock.nowEpochMillis()
                 store.update {
-                    it.copy(dataPolicyVersion = version, dataPolicyAcceptedAtEpochMillis = now)
+                    it.copy(
+                        dataPolicyVersion = version,
+                        dataPolicyAcceptedAtEpochMillis = now,
+                        policyRevocationPending = false,
+                    )
                 }
                 AgroResult.unit
             }
@@ -182,14 +194,32 @@ class AccountRepositoryImpl @Inject constructor(
 
     override suspend fun revokeDataPolicy(): AgroResult<Unit, DomainError> {
         store.update { it.copy(dataPolicyVersion = null, dataPolicyAcceptedAtEpochMillis = null) }
-        if (tokens.accessToken() == null) {
-            return if (store.current().tier == UserTier.T0_ANONIMO) {
-                AgroResult.unit
+        val result = if (tokens.accessToken() == null) {
+            if (store.current().tier == UserTier.T0_ANONIMO) {
+                return AgroResult.unit
             } else {
                 AgroResult.failure(DomainError.NotSignedIn)
             }
+        } else {
+            expireSessionOn(gateway.revokeDataPolicy())
         }
-        return expireSessionOn(gateway.revokeDataPolicy())
+        store.update { it.copy(policyRevocationPending = result is AgroResult.Failure) }
+        return result
+    }
+
+    override suspend fun retryPendingRevocations() {
+        if (tokens.accessToken() == null) return
+        val current = store.current()
+        if (current.trainingRevocationPending && !current.trainingConsent) {
+            if (expireSessionOn(gateway.setTrainingConsent(false)) is AgroResult.Success) {
+                store.update { it.copy(trainingRevocationPending = false) }
+            }
+        }
+        if (current.policyRevocationPending && current.dataPolicyVersion == null) {
+            if (expireSessionOn(gateway.revokeDataPolicy()) is AgroResult.Success) {
+                store.update { it.copy(policyRevocationPending = false) }
+            }
+        }
     }
 
     override suspend fun markSessionExpired() {
@@ -228,7 +258,9 @@ class AccountRepositoryImpl @Inject constructor(
                     farmName = profile.farmName,
                     vereda = profile.vereda,
                     municipality = profile.municipality,
-                    trainingConsent = profile.trainingConsent,
+                    // Con una revocación aún sin confirmar, el `true` del servidor
+                    // está desfasado: no puede volver a otorgar el consentimiento.
+                    trainingConsent = profile.trainingConsent && !account.trainingRevocationPending,
                     validatedAtEpochMillis = account.validatedAtEpochMillis ?: now,
                 )
             }
@@ -259,7 +291,7 @@ class LocationProviderImpl @Inject constructor(
     override suspend fun currentLocation(): GeoPoint? = withContext(io) {
         if (!hasPermission()) return@withContext null
 
-        val manager = context.getSystemService(LocationManager::class.java)
+        val manager = ContextCompat.getSystemService(context, LocationManager::class.java)
             ?: return@withContext null
 
         val freshnessWindow = AgroConstants.Location.FRESHNESS.inWholeMilliseconds
@@ -334,7 +366,7 @@ class LocationProviderImpl @Inject constructor(
      */
     override suspend fun acquireExactFix(timeout: Duration): FixResult {
         if (!hasFinePermission()) return FixResult.PermissionDenied
-        val manager = context.getSystemService(LocationManager::class.java)
+        val manager = ContextCompat.getSystemService(context, LocationManager::class.java)
         if (manager == null || !runCatching { manager.isProviderEnabled(LocationManager.GPS_PROVIDER) }
                 .getOrDefault(false)
         ) {
