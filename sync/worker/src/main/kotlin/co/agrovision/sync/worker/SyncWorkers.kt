@@ -14,6 +14,8 @@ import co.agrovision.core.model.usecase.PurgeExpiredCapturesUseCase
 import co.agrovision.core.model.usecase.RollBackModelUseCase
 import co.agrovision.core.model.usecase.SyncPendingUseCase
 import co.agrovision.core.model.usecase.SyncTrigger
+import co.agrovision.network.api.CatalogSync
+import co.agrovision.core.data.catalog.CatalogSeeder
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 
@@ -32,9 +34,13 @@ class SyncWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val syncPending: SyncPendingUseCase,
     private val purgeExpired: PurgeExpiredCapturesUseCase,
+    private val catalogSync: CatalogSync,
+    private val catalogSeeder: CatalogSeeder,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
+        catalogSeeder.seedIfEmpty()
+        val catalogOk = catalogSync.sync()
         val outcome = syncPending(SyncTrigger.WORKER)
 
         // La purga corre tras una sincronización con éxito, no antes: borrar
@@ -47,7 +53,7 @@ class SyncWorker @AssistedInject constructor(
 
         return when (outcome) {
             is AgroResult.Success -> {
-                if (outcome.value.failed > 0 && runAttemptCount < AgroConstants.Sync.MAX_ATTEMPTS) {
+                if ((!catalogOk || outcome.value.failed > 0) && runAttemptCount < AgroConstants.Sync.MAX_ATTEMPTS) {
                     Result.retry()
                 } else {
                     Result.success()

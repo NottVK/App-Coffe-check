@@ -14,6 +14,8 @@ import co.agrovision.core.model.port.PestCatalogRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
@@ -54,8 +56,9 @@ class CatalogSeeder @Inject constructor(
 ) {
 
     private val json = Json { ignoreUnknownKeys = true }
+    private val seedMutex = Mutex()
 
-    suspend fun seedIfEmpty(): Int = withContext(io) {
+    suspend fun seedIfEmpty(): Int = seedMutex.withLock { withContext(io) {
         // Se comprueba el contenido, no una bandera: si alguien limpió los datos
         // de la app, el catálogo tiene que volver. Una bandera en DataStore diría
         // «ya sembré» sobre una base vacía.
@@ -79,7 +82,7 @@ class CatalogSeeder @Inject constructor(
         catalog.upsertAll(parsed.map { it.toDomain() })
         Log.i(TAG, "Catálogo sembrado con ${parsed.size} fichas")
         parsed.size
-    }
+    } }
 
     private companion object {
         const val TAG = "AgroVision.Catalog"
