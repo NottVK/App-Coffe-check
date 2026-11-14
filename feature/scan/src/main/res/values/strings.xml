@@ -67,4 +67,15 @@
     <string name="zona_escenario_hasta">Hasta %1$s %% de plantas afectadas y %2$s %% de daño en hoja: %3$s a %4$s m</string>
     <string name="zona_escenario_mas">Más de lo anterior: %1$s a %2$s m</string>
     <string name="zona_escenario_cualquiera">En cualquier caso: %1$s a %2$s m</string>
+
+    <!-- Prototipo: daño en la hoja estimado por color sobre la foto del escaneo. -->
+    <string name="dano_estimado">Daño estimado en la hoja: ~%1$d %% (muy aproximado, prototipo)</string>
+    <string name="dano_no_estimable">No se pudo estimar el daño. Acerca la hoja y mejora la luz.</string>
+    <string name="dano_calculando">Estimando el daño en la hoja…</string>
+    <string name="dano_ver_mascara">Ver máscara</string>
+    <string name="dano_mascara_titulo">Máscara (solo debug): verde = hoja, magenta = daño</string>
+    <string name="dano_mascara_descripcion">Foto reducida con la hoja teñida de verde y el daño de magenta; el fondo, oscurecido.</string>
+    <string name="dano_preseleccion_auto">Preselección automática según el daño estimado en la foto (~%1$d %%). Puedes cambiarla.</string>
+    <string name="zona_escenario_resaltado">Coincide con el daño estimado</string>
+    <string name="zona_escenarios_nota_incidencia">Fila resaltada según el daño estimado en la hoja. Las plantas afectadas (incidencia) las sigues indicando tú.</string>
 </resources>

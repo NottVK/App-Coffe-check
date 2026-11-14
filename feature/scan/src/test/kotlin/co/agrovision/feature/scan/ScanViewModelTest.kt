@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
+import co.agrovision.core.model.zone.LeafDamageResult
 import co.agrovision.core.model.zone.SeverityBand
 import co.agrovision.core.model.zone.ZoneRule
 import co.agrovision.core.model.zone.ZoneRuleRow
@@ -87,6 +88,7 @@ class ScanViewModelTest {
         classifier = classifier,
         telemetry = telemetry,
         zoneRules = zoneRules,
+        computation = dispatcher,
     )
 
     /**
@@ -499,6 +501,58 @@ class ScanViewModelTest {
         assertNull(assertInstanceOf(ScanUiState.Identified::class.java, subject.state.value).zone)
     }
 
+    // ── Daño en la hoja (prototipo) ──────────────────────────────────────────
+
+    @Test
+    fun `con regla se estima el dano en la hoja sobre la foto`() = runTest(dispatcher) {
+        givenIdentified(classId = "Leaf rust")
+        zoneRules.rules["roya"] = ROYA_RULE
+
+        val subject = readyViewModel()
+        subject.onIntent(ScanIntent.Capture(leafImage()))
+
+        val damage = (subject.state.value as ScanUiState.Identified).leafDamage!!
+        val pct = assertInstanceOf(LeafDamageResult.Estimated::class.java, damage.result).pct
+        assertTrue(pct in 20..40, "daño $pct")
+    }
+
+    @Test
+    fun `sin hoja en la foto el dano no es estimable`() = runTest(dispatcher) {
+        givenIdentified(classId = "Leaf rust")
+        zoneRules.rules["roya"] = ROYA_RULE
+
+        val subject = readyViewModel()
+        subject.onIntent(ScanIntent.Capture(image()))
+
+        val damage = (subject.state.value as ScanUiState.Identified).leafDamage!!
+        assertInstanceOf(LeafDamageResult.NotEstimable::class.java, damage.result)
+    }
+
+    @Test
+    fun `el dano se conserva al estimar la zona y al cambiar la regla`() = runTest(dispatcher) {
+        givenIdentified(classId = "Leaf rust")
+        zoneRules.rules["roya"] = ROYA_RULE
+        val subject = readyViewModel()
+        subject.onIntent(ScanIntent.Capture(leafImage()))
+        val damage = (subject.state.value as ScanUiState.Identified).leafDamage!!
+
+        subject.onIntent(ScanIntent.EstimateZone(SeverityBand.MEDIA, incidencePct = 10, plantsPerHa = 4000))
+        assertEquals(damage, (subject.state.value as ScanUiState.Identified).leafDamage)
+
+        zoneRules.save("roya", ROYA_RULE.copy(version = 2), null)
+        assertEquals(damage, (subject.state.value as ScanUiState.Identified).leafDamage)
+    }
+
+    @Test
+    fun `una clase sin tipo de regla no estima dano`() = runTest(dispatcher) {
+        givenIdentified(classId = "Deficiencia_Potasio")
+
+        val subject = readyViewModel()
+        subject.onIntent(ScanIntent.Capture(leafImage()))
+
+        assertNull((subject.state.value as ScanUiState.Identified).leafDamage)
+    }
+
     // ── Utilidades ───────────────────────────────────────────────────────────
 
     /** ViewModel ya precalentado, en estado `Preview`. */
@@ -514,6 +568,17 @@ class ScanViewModelTest {
     }
 
     private fun image() = RgbImage(2, 2, IntArray(4))
+
+    /** Hoja verde que llena la foto con un cuadro marrón central de ~30 %. */
+    private fun leafImage(): RgbImage {
+        val w = 100
+        val h = 100
+        return RgbImage(w, h, IntArray(w * h) { i ->
+            val x = i % w
+            val y = i / w
+            if (x in 23 until 78 && y in 23 until 78) 0xFF784B1E.toInt() else 0xFF3C8C32.toInt()
+        })
+    }
 
     private fun inference() = RawInference(
         logits = floatArrayOf(4f, 1f, 0.5f),

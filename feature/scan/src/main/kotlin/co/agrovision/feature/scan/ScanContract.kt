@@ -5,7 +5,9 @@ import co.agrovision.core.common.UiText
 import co.agrovision.core.model.pest.PestTaxon
 import co.agrovision.core.model.scan.Prediction
 import co.agrovision.core.model.scan.QualityHint
+import co.agrovision.core.model.scan.RgbImage
 import co.agrovision.core.model.scan.UncertaintyReason
+import co.agrovision.core.model.zone.LeafDamageResult
 import co.agrovision.core.model.zone.SeverityBand
 import co.agrovision.core.model.zone.ZoneEstimate
 import co.agrovision.core.model.zone.ZoneRule
@@ -65,6 +67,12 @@ sealed interface ScanUiState {
          * servidor: en ese caso no se ofrece nada, ni se inventa una tabla.
          */
         val zone: ZoneAvailability? = null,
+        /**
+         * PROTOTIPO: daño en la hoja estimado por color sobre esta foto. `null`
+         * mientras se calcula o si la clase no tiene tipo de regla. Se calcula
+         * una sola vez por captura y sobrevive a los cambios de regla.
+         */
+        val leafDamage: LeafDamage? = null,
     ) : ScanUiState
 
     /** La clase de rechazo ganó: lo que hay en la imagen no es una plaga. Es un
@@ -134,6 +142,13 @@ data class ZoneAvailability(
      */
     fun isStale(form: ZoneInputs?): Boolean = estimate != null && inputs != form
 }
+
+/**
+ * Estimación de daño (prototipo, muy aproximada) y, solo en builds debug, la
+ * máscara superpuesta (hoja/daño) para ajustar umbrales.
+ */
+@Immutable
+data class LeafDamage(val result: LeafDamageResult, val debugMask: RgbImage? = null)
 
 /** Valores de los controles manuales con que se calcula una estimación. */
 @Immutable

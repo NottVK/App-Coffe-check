@@ -3,7 +3,9 @@ package co.agrovision.feature.scan
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import co.agrovision.core.common.AgroDispatcher
 import co.agrovision.core.common.AgroResult
+import co.agrovision.core.common.Dispatcher
 import co.agrovision.core.common.MessageKey
 import co.agrovision.core.common.UiText
 import co.agrovision.core.model.DomainError
@@ -17,12 +19,16 @@ import co.agrovision.core.model.usecase.ConfirmPredictionUseCase
 import co.agrovision.core.model.usecase.CorrectPredictionUseCase
 import co.agrovision.core.model.usecase.SaveCaptureUseCase
 import co.agrovision.core.model.port.ZoneRuleRepository
+import co.agrovision.core.model.zone.LeafDamageEstimator
+import co.agrovision.core.model.zone.LeafDamageResult
 import co.agrovision.core.model.zone.ZoneDefaults
 import co.agrovision.core.model.zone.ZoneRuleTypes
 import co.agrovision.core.model.zone.estimateZone
 import co.agrovision.core.model.zone.isValidFor
 import co.agrovision.core.model.zone.ZoneRule
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -52,6 +58,7 @@ class ScanViewModel @Inject constructor(
     private val classifier: PestClassifier,
     private val telemetry: TelemetryRecorder,
     private val zoneRules: ZoneRuleRepository,
+    @Dispatcher(AgroDispatcher.Default) private val computation: CoroutineDispatcher,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<ScanUiState>(ScanUiState.Idle)
@@ -62,6 +69,9 @@ class ScanViewModel @Inject constructor(
 
     /** Observación de la regla de zona del resultado en pantalla; ver [watchZone]. */
     private var zoneWatcher: Job? = null
+
+    /** Cálculo del daño en la hoja de la captura en pantalla; ver [estimateLeafDamage]. */
+    private var damageJob: Job? = null
 
     fun onIntent(intent: ScanIntent) {
         when (intent) {
@@ -103,6 +113,7 @@ class ScanViewModel @Inject constructor(
      */
     private fun analyze(image: RgbImage) {
         stopWatchingZone()
+        cancelLeafDamage()
         _state.value = ScanUiState.Analyzing
         viewModelScope.launch {
             val classification = when (val result = classifyImage(image)) {
@@ -160,6 +171,7 @@ class ScanViewModel @Inject constructor(
                     val shown = classification.toUiState(saved.value).withZone()
                     _state.value = shown
                     watchZone(shown)
+                    estimateLeafDamage(shown, image)
                 }
             }
         }
@@ -228,6 +240,37 @@ class ScanViewModel @Inject constructor(
         val current = shown() ?: return
         if (current.zone?.rule == rule) return
         _state.value = current.copy(zone = if (rule == null || plantsPerHa == null) null else ZoneAvailability(rule, plantsPerHa))
+    }
+
+    /**
+     * PROTOTIPO: daño en la hoja por color, fuera del hilo principal y una sola
+     * vez por captura (el resultado queda en el estado y los cambios de regla lo
+     * conservan). Se calcula para toda clase con tipo de regla, haya o no regla
+     * en caché, para que esté listo si la regla llega con la pantalla abierta.
+     * El estado se escribe de vuelta en el hilo principal, como los demás.
+     */
+    private fun estimateLeafDamage(shown: ScanUiState, image: RgbImage) {
+        val identified = shown as? ScanUiState.Identified ?: return
+        if (identified.zoneRuleType() == null) return
+        damageJob = viewModelScope.launch {
+            val damage = withContext(computation) {
+                runCatching {
+                    val analysis = LeafDamageEstimator.analyze(image)
+                    LeafDamage(analysis.result, debugMask = if (BuildConfig.DEBUG) analysis.overlay() else null)
+                }.getOrElse {
+                    Log.w(TAG, "no se pudo estimar el daño en la hoja", it)
+                    LeafDamage(LeafDamageResult.NotEstimable(LeafDamageResult.Reason.FAILED))
+                }
+            }
+            val current = (_state.value as? ScanUiState.Identified)
+                ?.takeIf { it.captureId == identified.captureId } ?: return@launch
+            _state.value = current.copy(leafDamage = damage)
+        }
+    }
+
+    private fun cancelLeafDamage() {
+        damageJob?.cancel()
+        damageJob = null
     }
 
     /** Solo cálculo local: el resultado no se guarda en Room ni se envía al API. */
@@ -299,6 +342,7 @@ class ScanViewModel @Inject constructor(
 
     private fun backToPreview() {
         stopWatchingZone()
+        cancelLeafDamage()
         _state.value = ScanUiState.Preview(
             guidance = FramingGuidance.LISTO,
             modelReady = classifier.activeModelVersion() != null,

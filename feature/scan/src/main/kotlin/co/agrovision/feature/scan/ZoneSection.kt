@@ -1,5 +1,6 @@
 package co.agrovision.feature.scan
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,6 +16,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableIntState
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
@@ -26,9 +28,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import co.agrovision.core.designsystem.component.PlantsPer100Counter
 import co.agrovision.core.designsystem.component.PlantsPerHaField
 import co.agrovision.core.designsystem.component.PrimaryFieldButton
@@ -43,7 +47,9 @@ import co.agrovision.core.model.zone.ZoneDefaults
 import co.agrovision.core.model.zone.ZoneRule
 import co.agrovision.core.model.zone.ZoneScenario
 import co.agrovision.core.model.zone.formatZoneNumber
+import co.agrovision.core.model.zone.rowIndexForSeverity
 import co.agrovision.core.model.zone.scenarios
+import co.agrovision.core.model.zone.severityBandFor
 
 /**
  * Botón «Estimar zona a vigilar» y su hoja de controles manuales. El cálculo lo
@@ -55,9 +61,20 @@ import co.agrovision.core.model.zone.scenarios
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun ZoneSection(zone: ZoneAvailability, onIntent: (ScanIntent) -> Unit) {
+internal fun ZoneSection(zone: ZoneAvailability, damagePct: Int?, onIntent: (ScanIntent) -> Unit) {
     var open by rememberSaveable { mutableStateOf(false) }
     val form = rememberZoneForm(zone)
+
+    // Preselección automática con el daño estimado (prototipo). Solo si el
+    // productor no eligió nada ni hay cálculo previo: nunca pisa su elección,
+    // y el selector sigue libre. No calcula nada por sí sola.
+    val suggested = damagePct?.let(::severityBandFor)
+    LaunchedEffect(suggested) {
+        if (suggested != null && form.severity == null && zone.inputs == null) {
+            form.severity = suggested
+            form.autoSelected = true
+        }
+    }
 
     SecondaryFieldButton(
         text = stringResource(R.string.zona_estimar),
@@ -71,7 +88,7 @@ internal fun ZoneSection(zone: ZoneAvailability, onIntent: (ScanIntent) -> Unit)
             onDismissRequest = { open = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         ) {
-            ZoneControlsSheet(zone, form, onIntent, onClose = { open = false })
+            ZoneControlsSheet(zone, form, damagePct, onIntent, onClose = { open = false })
         }
     }
 }
@@ -81,8 +98,11 @@ private class ZoneFormState(
     severityState: MutableState<SeverityBand?>,
     incidenceState: MutableIntState,
     plantsTextState: MutableState<String>,
+    autoSelectedState: MutableState<Boolean>,
 ) {
     var severity by severityState
+    /** `true` si [severity] la puso la estimación por foto y el productor no la tocó. */
+    var autoSelected by autoSelectedState
     var incidence by incidenceState
     var plantsText by plantsTextState
 
@@ -99,13 +119,17 @@ private fun rememberZoneForm(zone: ZoneAvailability): ZoneFormState {
     val severity = rememberSaveable { mutableStateOf(zone.inputs?.severity) }
     val incidence = rememberSaveable { mutableIntStateOf(zone.inputs?.incidencePct ?: 0) }
     val plantsText = rememberSaveable { mutableStateOf((zone.inputs?.plantsPerHa ?: zone.plantsPerHa).toString()) }
-    return remember(severity, incidence, plantsText) { ZoneFormState(severity, incidence, plantsText) }
+    val autoSelected = rememberSaveable { mutableStateOf(false) }
+    return remember(severity, incidence, plantsText, autoSelected) {
+        ZoneFormState(severity, incidence, plantsText, autoSelected)
+    }
 }
 
 @Composable
 private fun ZoneControlsSheet(
     zone: ZoneAvailability,
     form: ZoneFormState,
+    damagePct: Int?,
     onIntent: (ScanIntent) -> Unit,
     onClose: () -> Unit,
 ) {
@@ -124,7 +148,16 @@ private fun ZoneControlsSheet(
             modifier = Modifier.semantics { heading() },
         )
         Text(stringResource(R.string.zona_pregunta_severidad), style = MaterialTheme.typography.titleMedium)
-        SeverityBandSelector(selected = form.severity, onSelect = { form.severity = it })
+        SeverityBandSelector(
+            selected = form.severity,
+            onSelect = {
+                form.severity = it
+                form.autoSelected = false
+            },
+        )
+        if (form.autoSelected && damagePct != null) {
+            StatusPill(text = stringResource(R.string.dano_preseleccion_auto, damagePct), tone = StatusTone.NEUTRAL)
+        }
 
         Text(stringResource(R.string.zona_pregunta_incidencia), style = MaterialTheme.typography.titleMedium)
         PlantsPer100Counter(value = form.incidence, onValueChange = { form.incidence = it })
@@ -209,9 +242,12 @@ private fun ZoneResult(zone: ZoneAvailability, stale: Boolean, announce: Boolean
  * regla no es válida no se muestra nada (ni siquiera el título).
  */
 @Composable
-internal fun ZoneScenariosBlock(rule: ZoneRule) {
+internal fun ZoneScenariosBlock(rule: ZoneRule, damagePct: Int? = null) {
     val scenarios = remember(rule) { rule.scenarios(rule.tipoEnfermedad) }
     if (scenarios.isEmpty()) return
+    // Fila que corresponde al daño estimado (solo por sevMax). No oculta las demás.
+    val highlighted = damagePct?.let { rule.rowIndexForSeverity(it) }
+    val highlightLabel = stringResource(R.string.zona_escenario_resaltado)
     Column(
         verticalArrangement = Arrangement.spacedBy(AgroTheme.dimensions.gutterTight),
         modifier = Modifier.fillMaxWidth(),
@@ -221,7 +257,8 @@ internal fun ZoneScenariosBlock(rule: ZoneRule) {
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.semantics { heading() },
         )
-        scenarios.forEach { s ->
+        scenarios.forEachIndexed { i, s ->
+            val isHighlighted = i == highlighted
             // Cada fila es un solo texto: el lector de pantalla la lee completa, en orden.
             Text(
                 text = when (s.kind) {
@@ -231,7 +268,27 @@ internal fun ZoneScenariosBlock(rule: ZoneRule) {
                     ZoneScenario.Kind.CUALQUIERA -> stringResource(R.string.zona_escenario_cualquiera, s.radioMin, s.radioMax)
                 },
                 style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(start = AgroTheme.dimensions.gutter),
+                fontWeight = if (isHighlighted) FontWeight.Bold else null,
+                color = if (isHighlighted) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (isHighlighted) {
+                            Modifier
+                                .background(MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.shapes.small)
+                                .semantics { stateDescription = highlightLabel }
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .padding(start = AgroTheme.dimensions.gutter),
+            )
+        }
+        if (highlighted != null) {
+            Text(
+                stringResource(R.string.zona_escenarios_nota_incidencia),
+                style = MaterialTheme.typography.bodyMedium,
+                color = AgroTheme.semantic.mutedText,
             )
         }
         // Aviso fijo: sin calibrar, los radios son criterio experto, no una medición.

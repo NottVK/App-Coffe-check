@@ -4,6 +4,10 @@ plugins {
 
 android {
     namespace = "co.agrovision.feature.scan"
+    // BuildConfig.DEBUG: la máscara de depuración del daño en la hoja solo en debug.
+    buildFeatures {
+        buildConfig = true
+    }
 }
 
 dependencies {

@@ -197,7 +197,11 @@ private fun IdentifiedContent(state: ScanUiState.Identified, onIntent: (ScanInte
 
         // Escenarios automáticos de la regla en caché. `zone` sigue a la regla
         // (ScanViewModel.watchZone): si el servidor la retira, el bloque desaparece.
-        state.zone?.let { zone -> ZoneScenariosBlock(zone.rule) }
+        // Prototipo de daño en la hoja por color: junto a los escenarios, solo con regla.
+        state.zone?.let { zone ->
+            LeafDamageBlock(state.leafDamage)
+            ZoneScenariosBlock(zone.rule, damagePct = state.leafDamage.estimatedPct)
+        }
 
         PrimaryFieldButton(
             text = stringResource(R.string.scan_es_correcto),
@@ -205,7 +209,7 @@ private fun IdentifiedContent(state: ScanUiState.Identified, onIntent: (ScanInte
             onClick = { onIntent(ScanIntent.ConfirmPrediction(state.captureId)) },
         )
         // Sin regla en caché `zone` es null: no hay botón ni tabla inventada.
-        state.zone?.let { zone -> ZoneSection(zone, onIntent) }
+        state.zone?.let { zone -> ZoneSection(zone, state.leafDamage.estimatedPct, onIntent) }
         SecondaryFieldButton(
             text = stringResource(R.string.scan_no_es_esto),
             icon = Icons.AutoMirrored.Filled.HelpOutline,
