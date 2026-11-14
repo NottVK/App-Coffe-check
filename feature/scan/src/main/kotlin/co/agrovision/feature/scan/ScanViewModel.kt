@@ -20,6 +20,7 @@ import co.agrovision.core.model.port.ZoneRuleRepository
 import co.agrovision.core.model.zone.ZoneDefaults
 import co.agrovision.core.model.zone.ZoneRuleTypes
 import co.agrovision.core.model.zone.estimateZone
+import co.agrovision.core.model.zone.isValidFor
 import co.agrovision.core.model.zone.ZoneRule
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.catch
@@ -174,7 +175,7 @@ class ScanViewModel @Inject constructor(
         val rule = runCatching { zoneRules.cached(type)?.rule }
             .onFailure { Log.w(TAG, "no se pudo leer la regla de zona", it) }
             .getOrNull()
-            ?.takeIf { it.filas.isNotEmpty() }
+            ?.takeIf { it.isValidFor(type) }
             ?: return this
         return copy(zone = ZoneAvailability(rule, storedPlantsPerHa()))
     }
@@ -198,7 +199,7 @@ class ScanViewModel @Inject constructor(
         val type = identified.zoneRuleType() ?: return
         zoneWatcher = viewModelScope.launch {
             zoneRules.observe(type)
-                .map { cached -> cached?.rule?.takeIf { it.filas.isNotEmpty() } }
+                .map { cached -> cached?.rule?.takeIf { it.isValidFor(type) } }
                 .distinctUntilChanged()
                 // Un fallo de lectura no retira nada: se queda la última regla mostrada.
                 .catch { Log.w(TAG, "no se pudo observar la regla de zona", it) }

@@ -330,6 +330,18 @@ class ScanViewModelTest {
     }
 
     @Test
+    fun `una regla en cache que no cumple el contrato no se ofrece`() = runTest(dispatcher) {
+        givenIdentified(classId = "Leaf rust")
+        // Sin la fila 100/100 la tabla no cubre toda observación (isValidFor la rechaza).
+        zoneRules.rules["roya"] = ROYA_RULE.copy(filas = ROYA_RULE.filas.dropLast(1))
+
+        val subject = readyViewModel()
+        subject.onIntent(ScanIntent.Capture(image()))
+
+        assertNull(assertInstanceOf(ScanUiState.Identified::class.java, subject.state.value).zone)
+    }
+
+    @Test
     fun `la densidad de siembra editada se guarda`() = runTest(dispatcher) {
         givenIdentified(classId = "Leaf rust")
         zoneRules.rules["roya"] = ROYA_RULE

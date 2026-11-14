@@ -195,6 +195,10 @@ private fun IdentifiedContent(state: ScanUiState.Identified, onIntent: (ScanInte
             )
         }
 
+        // Escenarios automáticos de la regla en caché. `zone` sigue a la regla
+        // (ScanViewModel.watchZone): si el servidor la retira, el bloque desaparece.
+        state.zone?.let { zone -> ZoneScenariosBlock(zone.rule) }
+
         PrimaryFieldButton(
             text = stringResource(R.string.scan_es_correcto),
             icon = Icons.Filled.Check,

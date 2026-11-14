@@ -40,9 +40,10 @@ import co.agrovision.core.designsystem.component.severityBandLabel
 import co.agrovision.core.designsystem.theme.AgroTheme
 import co.agrovision.core.model.zone.SeverityBand
 import co.agrovision.core.model.zone.ZoneDefaults
-import java.text.DecimalFormat
-import java.text.DecimalFormatSymbols
-import java.util.Locale
+import co.agrovision.core.model.zone.ZoneRule
+import co.agrovision.core.model.zone.ZoneScenario
+import co.agrovision.core.model.zone.formatZoneNumber
+import co.agrovision.core.model.zone.scenarios
 
 /**
  * Botón «Estimar zona a vigilar» y su hoja de controles manuales. El cálculo lo
@@ -171,7 +172,7 @@ private fun ZoneResult(zone: ZoneAvailability, stale: Boolean, announce: Boolean
         },
     ) {
         Text(
-            stringResource(R.string.zona_resultado_radio, formatMeters(estimate.radioMinM), formatMeters(estimate.radioMaxM)),
+            stringResource(R.string.zona_resultado_radio, formatZoneNumber(estimate.radioMinM), formatZoneNumber(estimate.radioMaxM)),
             style = MaterialTheme.typography.titleMedium,
         )
         Text(
@@ -202,6 +203,42 @@ private fun ZoneResult(zone: ZoneAvailability, stale: Boolean, announce: Boolean
     }
 }
 
-/** «15» en vez de «15.0»; «2,5» con coma decimal, como se escribe en Colombia. */
-private fun formatMeters(value: Double): String =
-    DecimalFormat("0.#", DecimalFormatSymbols(Locale.forLanguageTag("es-CO"))).format(value)
+/**
+ * Tabla de la regla como escenarios, sin que el productor toque nada. Va debajo
+ * del diagnóstico; los controles manuales de [ZoneSection] siguen aparte. Si la
+ * regla no es válida no se muestra nada (ni siquiera el título).
+ */
+@Composable
+internal fun ZoneScenariosBlock(rule: ZoneRule) {
+    val scenarios = remember(rule) { rule.scenarios(rule.tipoEnfermedad) }
+    if (scenarios.isEmpty()) return
+    Column(
+        verticalArrangement = Arrangement.spacedBy(AgroTheme.dimensions.gutterTight),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            stringResource(R.string.zona_escenarios_titulo),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.semantics { heading() },
+        )
+        scenarios.forEach { s ->
+            // Cada fila es un solo texto: el lector de pantalla la lee completa, en orden.
+            Text(
+                text = when (s.kind) {
+                    ZoneScenario.Kind.HASTA ->
+                        stringResource(R.string.zona_escenario_hasta, s.incidenciaPct, s.severidadPct, s.radioMin, s.radioMax)
+                    ZoneScenario.Kind.MAS -> stringResource(R.string.zona_escenario_mas, s.radioMin, s.radioMax)
+                    ZoneScenario.Kind.CUALQUIERA -> stringResource(R.string.zona_escenario_cualquiera, s.radioMin, s.radioMax)
+                },
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(start = AgroTheme.dimensions.gutter),
+            )
+        }
+        // Aviso fijo: sin calibrar, los radios son criterio experto, no una medición.
+        StatusPill(
+            text = if (rule.calibrada) stringResource(R.string.zona_calibrada, rule.version)
+            else stringResource(R.string.zona_sin_calibrar, rule.version),
+            tone = if (rule.calibrada) StatusTone.POSITIVE else StatusTone.WARNING,
+        )
+    }
+}
