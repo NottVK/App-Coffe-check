@@ -52,6 +52,18 @@ fun ZoneRule.scenarios(type: String): List<ZoneScenario> {
     }
 }
 
+/**
+ * Con daño estimado, solo la fila que corresponde por severidad; sin estimación
+ * (incluido `null` mientras se calcula), todas. Conserva el tipo y los números
+ * de la fila original; la incidencia sigue siendo manual.
+ */
+fun ZoneRule.visibleScenarios(type: String, damage: LeafDamageResult?): List<ZoneScenario> {
+    val scenarios = scenarios(type)
+    if (scenarios.isEmpty() || damage !is LeafDamageResult.Estimated) return scenarios
+    val index = rowIndexForSeverity(damage.pct) ?: return emptyList()
+    return listOf(scenarios[index])
+}
+
 /** «15» en vez de «15.0»; «2,5» con coma decimal, como se escribe en Colombia. */
 fun formatZoneNumber(value: Double): String =
     DecimalFormat("0.#", DecimalFormatSymbols(Locale.forLanguageTag("es-CO"))).format(value)

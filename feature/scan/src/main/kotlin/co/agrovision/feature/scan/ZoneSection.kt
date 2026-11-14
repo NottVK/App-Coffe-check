@@ -42,14 +42,14 @@ import co.agrovision.core.designsystem.component.StatusPill
 import co.agrovision.core.designsystem.component.StatusTone
 import co.agrovision.core.designsystem.component.severityBandLabel
 import co.agrovision.core.designsystem.theme.AgroTheme
+import co.agrovision.core.model.zone.LeafDamageResult
 import co.agrovision.core.model.zone.SeverityBand
 import co.agrovision.core.model.zone.ZoneDefaults
 import co.agrovision.core.model.zone.ZoneRule
 import co.agrovision.core.model.zone.ZoneScenario
 import co.agrovision.core.model.zone.formatZoneNumber
-import co.agrovision.core.model.zone.rowIndexForSeverity
-import co.agrovision.core.model.zone.scenarios
 import co.agrovision.core.model.zone.severityBandFor
+import co.agrovision.core.model.zone.visibleScenarios
 
 /**
  * Botón «Estimar zona a vigilar» y su hoja de controles manuales. El cálculo lo
@@ -239,14 +239,14 @@ private fun ZoneResult(zone: ZoneAvailability, stale: Boolean, announce: Boolean
 /**
  * Tabla de la regla como escenarios, sin que el productor toque nada. Va debajo
  * del diagnóstico; los controles manuales de [ZoneSection] siguen aparte. Si la
- * regla no es válida no se muestra nada (ni siquiera el título).
+ * regla no es válida no se muestra nada (ni siquiera el título). Con estimación
+ * solo se muestra la fila correspondiente; sin ella se muestran todas.
  */
 @Composable
-internal fun ZoneScenariosBlock(rule: ZoneRule, damagePct: Int? = null) {
-    val scenarios = remember(rule) { rule.scenarios(rule.tipoEnfermedad) }
+internal fun ZoneScenariosBlock(rule: ZoneRule, damage: LeafDamageResult? = null) {
+    val scenarios = remember(rule, damage) { rule.visibleScenarios(rule.tipoEnfermedad, damage) }
     if (scenarios.isEmpty()) return
-    // Fila que corresponde al daño estimado (solo por sevMax). No oculta las demás.
-    val highlighted = damagePct?.let { rule.rowIndexForSeverity(it) }
+    val isHighlighted = damage is LeafDamageResult.Estimated
     val highlightLabel = stringResource(R.string.zona_escenario_resaltado)
     Column(
         verticalArrangement = Arrangement.spacedBy(AgroTheme.dimensions.gutterTight),
@@ -257,8 +257,7 @@ internal fun ZoneScenariosBlock(rule: ZoneRule, damagePct: Int? = null) {
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.semantics { heading() },
         )
-        scenarios.forEachIndexed { i, s ->
-            val isHighlighted = i == highlighted
+        scenarios.forEach { s ->
             // Cada fila es un solo texto: el lector de pantalla la lee completa, en orden.
             Text(
                 text = when (s.kind) {
@@ -284,7 +283,7 @@ internal fun ZoneScenariosBlock(rule: ZoneRule, damagePct: Int? = null) {
                     .padding(start = AgroTheme.dimensions.gutter),
             )
         }
-        if (highlighted != null) {
+        if (isHighlighted) {
             Text(
                 stringResource(R.string.zona_escenarios_nota_incidencia),
                 style = MaterialTheme.typography.bodyMedium,

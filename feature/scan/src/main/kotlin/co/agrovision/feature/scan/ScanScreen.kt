@@ -200,7 +200,7 @@ private fun IdentifiedContent(state: ScanUiState.Identified, onIntent: (ScanInte
         // Prototipo de daño en la hoja por color: junto a los escenarios, solo con regla.
         state.zone?.let { zone ->
             LeafDamageBlock(state.leafDamage)
-            ZoneScenariosBlock(zone.rule, damagePct = state.leafDamage.estimatedPct)
+            ZoneScenariosBlock(zone.rule, damage = state.leafDamage?.result)
         }
 
         PrimaryFieldButton(
