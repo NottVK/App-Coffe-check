@@ -251,9 +251,21 @@ class FakeZoneRules(
     val rules: MutableMap<String, co.agrovision.core.model.zone.ZoneRule> = mutableMapOf(),
 ) : co.agrovision.core.model.port.ZoneRuleRepository {
     val plants = MutableStateFlow(co.agrovision.core.model.zone.ZoneDefaults.PLANTS_PER_HA)
+    /** Cambia con cada escritura del «worker» ([save]/[clear]) para reemitir en [observe]. */
+    private val revision = MutableStateFlow(0)
+    var observers = 0
+        private set
     override suspend fun cached(type: String) = rules[type]?.let { co.agrovision.core.model.port.CachedZoneRule(it, null) }
-    override suspend fun save(type: String, rule: co.agrovision.core.model.zone.ZoneRule, etag: String?) { rules[type] = rule }
-    override suspend fun clear(type: String) { rules.remove(type) }
+    override fun observe(type: String): Flow<co.agrovision.core.model.port.CachedZoneRule?> = kotlinx.coroutines.flow.flow {
+        observers++
+        try {
+            revision.collect { emit(rules[type]?.let { co.agrovision.core.model.port.CachedZoneRule(it, null) }) }
+        } finally {
+            observers--
+        }
+    }
+    override suspend fun save(type: String, rule: co.agrovision.core.model.zone.ZoneRule, etag: String?) { rules[type] = rule; revision.value++ }
+    override suspend fun clear(type: String) { rules.remove(type); revision.value++ }
     override fun observePlantsPerHa(): Flow<Int> = plants
     override suspend fun setPlantsPerHa(value: Int) { plants.value = value }
 }

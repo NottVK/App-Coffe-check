@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.edit
+import app.cash.turbine.test
 import co.agrovision.core.model.zone.ZoneRule
 import co.agrovision.core.model.zone.ZoneRuleRow
 import kotlinx.coroutines.flow.Flow
@@ -44,6 +45,33 @@ class ZoneRuleStoreTest {
         assertNull(store.cached("phoma"))
         store.clear("roya")
         assertNull(store.cached("roya"))
+    }
+
+    @Test
+    fun `observe emite la regla, su reemplazo y su retirada, e ignora otras claves`() = runTest {
+        val store = ZoneRuleStore(MemoryPreferences())
+        store.observe("roya").test {
+            assertNull(awaitItem())
+
+            store.save("roya", rule, "\"a\"")
+            assertEquals(rule, awaitItem()!!.rule)
+
+            // Otra clave del mismo DataStore y otro tipo no reemiten.
+            store.setPlantsPerHa(3300)
+            store.save("phoma", rule.copy(tipoEnfermedad = "phoma"), null)
+            expectNoEvents()
+
+            val next = rule.copy(version = 3)
+            store.save("roya", next, "\"b\"")
+            assertEquals(next, awaitItem()!!.rule)
+
+            // 204: la regla se retira.
+            store.clear("roya")
+            assertNull(awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+        // Un tipo con formato inválido nunca tiene regla.
+        assertNull(store.observe("Tipo Inválido").first())
     }
 
     @Test

@@ -79,6 +79,32 @@ class SyncScheduler @Inject constructor(
     }
 
     /**
+     * Reglas de «zona a vigilar», en su propio trabajo único: ni retrasan el
+     * reintento de la cola ni ocupan el hueco `KEEP` de [scheduleOpportunistic].
+     * Misma restricción de red que la cola (ADR-008): son unos pocos KB.
+     */
+    fun scheduleZoneRules(policy: SyncNetworkPolicy) {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(
+                if (policy.allowsMetered) NetworkType.CONNECTED else NetworkType.UNMETERED
+            )
+            .build()
+
+        val request = OneTimeWorkRequestBuilder<ZoneRuleWorker>()
+            .setConstraints(constraints)
+            .setBackoffCriteria(
+                BackoffPolicy.EXPONENTIAL,
+                AgroConstants.Sync.INITIAL_BACKOFF.inWholeMilliseconds,
+                TimeUnit.MILLISECONDS,
+            )
+            .addTag(TAG_ZONE_RULES)
+            .build()
+
+        // KEEP: una descarga en curso o en backoff no se reinicia al reabrir la app.
+        workManager.enqueueUniqueWork(WORK_ZONE_RULES, ExistingWorkPolicy.KEEP, request)
+    }
+
+    /**
      * Comprobación de modelo. Preferentemente sobre WiFi —un modelo pesa entre 4
      * y 9 MB— pero sin exigirlo: quien tiene solo datos también necesita recibir
      * correcciones del reconocedor.
@@ -111,6 +137,8 @@ class SyncScheduler @Inject constructor(
         const val WORK_MODEL = "agrovision.model-check"
         const val TAG_SYNC = "sync"
         const val TAG_MODEL = "model"
+        const val WORK_ZONE_RULES = "agrovision.zone-rules"
+        const val TAG_ZONE_RULES = "zone-rules"
 
         /** Retraso inicial: al abrir la app, primero sube lo pendiente; el modelo
          *  puede esperar unos minutos y no compite por el mismo ancho de banda. */

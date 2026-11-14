@@ -20,7 +20,12 @@ import co.agrovision.core.model.port.ZoneRuleRepository
 import co.agrovision.core.model.zone.ZoneDefaults
 import co.agrovision.core.model.zone.ZoneRuleTypes
 import co.agrovision.core.model.zone.estimateZone
+import co.agrovision.core.model.zone.ZoneRule
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,6 +58,9 @@ class ScanViewModel @Inject constructor(
 
     private val _effects = Channel<ScanEffect>(Channel.BUFFERED)
     val effects = _effects.receiveAsFlow()
+
+    /** Observación de la regla de zona del resultado en pantalla; ver [watchZone]. */
+    private var zoneWatcher: Job? = null
 
     fun onIntent(intent: ScanIntent) {
         when (intent) {
@@ -93,6 +101,7 @@ class ScanViewModel @Inject constructor(
      * creería que quedó guardada.
      */
     private fun analyze(image: RgbImage) {
+        stopWatchingZone()
         _state.value = ScanUiState.Analyzing
         viewModelScope.launch {
             val classification = when (val result = classifyImage(image)) {
@@ -146,7 +155,11 @@ class ScanViewModel @Inject constructor(
 
             when (saved) {
                 is AgroResult.Failure -> _state.value = saved.error.toErrorState()
-                is AgroResult.Success -> _state.value = classification.toUiState(saved.value).withZone()
+                is AgroResult.Success -> {
+                    val shown = classification.toUiState(saved.value).withZone()
+                    _state.value = shown
+                    watchZone(shown)
+                }
             }
         }
     }
@@ -157,16 +170,63 @@ class ScanViewModel @Inject constructor(
      */
     private suspend fun ScanUiState.withZone(): ScanUiState {
         if (this !is ScanUiState.Identified) return this
-        val classId = top.firstOrNull { it.pestId == pest.id }?.classId
-        val type = ZoneRuleTypes.forClass(classId, pest.id) ?: return this
+        val type = zoneRuleType() ?: return this
         val rule = runCatching { zoneRules.cached(type)?.rule }
             .onFailure { Log.w(TAG, "no se pudo leer la regla de zona", it) }
             .getOrNull()
             ?.takeIf { it.filas.isNotEmpty() }
             ?: return this
-        val plantsPerHa = runCatching { zoneRules.observePlantsPerHa().first() }
-            .getOrDefault(ZoneDefaults.PLANTS_PER_HA)
-        return copy(zone = ZoneAvailability(rule, plantsPerHa))
+        return copy(zone = ZoneAvailability(rule, storedPlantsPerHa()))
+    }
+
+    private fun ScanUiState.Identified.zoneRuleType(): String? =
+        ZoneRuleTypes.forClass(top.firstOrNull { it.pestId == pest.id }?.classId, pest.id)
+
+    private suspend fun storedPlantsPerHa(): Int =
+        runCatching { zoneRules.observePlantsPerHa().first() }.getOrDefault(ZoneDefaults.PLANTS_PER_HA)
+
+    /**
+     * Sigue la regla del tipo mientras el resultado esté en pantalla.
+     *
+     * [withZone] copia la regla una vez; sin esto, si la sincronización la retira
+     * (204) o la reemplaza con el resultado abierto, el productor seguiría
+     * calculando con una tabla que el servidor ya no publica.
+     */
+    private fun watchZone(shown: ScanUiState) {
+        stopWatchingZone()
+        val identified = shown as? ScanUiState.Identified ?: return
+        val type = identified.zoneRuleType() ?: return
+        zoneWatcher = viewModelScope.launch {
+            zoneRules.observe(type)
+                .map { cached -> cached?.rule?.takeIf { it.filas.isNotEmpty() } }
+                .distinctUntilChanged()
+                // Un fallo de lectura no retira nada: se queda la última regla mostrada.
+                .catch { Log.w(TAG, "no se pudo observar la regla de zona", it) }
+                .collect { rule -> applyZoneRule(identified.captureId, rule) }
+        }
+    }
+
+    private fun stopWatchingZone() {
+        zoneWatcher?.cancel()
+        zoneWatcher = null
+    }
+
+    /**
+     * Regla retirada: desaparecen el botón y la estimación. Regla distinta: se
+     * ofrece la nueva **sin** estimación, porque el resultado anterior salió de
+     * otra tabla y marcarlo solo como «desactualizado» lo dejaría a la vista.
+     * La misma regla no toca nada, así que el resultado y su aviso de
+     * desactualizado ([ZoneAvailability.isStale]) se conservan.
+     */
+    private suspend fun applyZoneRule(captureId: String, rule: ZoneRule?) {
+        fun shown() = (_state.value as? ScanUiState.Identified)?.takeIf { it.captureId == captureId }
+        val before = shown() ?: return
+        if (before.zone?.rule == rule) return
+        val plantsPerHa = if (rule == null) null else before.zone?.plantsPerHa ?: storedPlantsPerHa()
+        // Se relee el estado: la lectura de la densidad suspende.
+        val current = shown() ?: return
+        if (current.zone?.rule == rule) return
+        _state.value = current.copy(zone = if (rule == null || plantsPerHa == null) null else ZoneAvailability(rule, plantsPerHa))
     }
 
     /** Solo cálculo local: el resultado no se guarda en Room ni se envía al API. */
@@ -237,6 +297,7 @@ class ScanViewModel @Inject constructor(
     }
 
     private fun backToPreview() {
+        stopWatchingZone()
         _state.value = ScanUiState.Preview(
             guidance = FramingGuidance.LISTO,
             modelReady = classifier.activeModelVersion() != null,

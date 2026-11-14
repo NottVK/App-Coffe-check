@@ -13,6 +13,13 @@ data class CachedZoneRule(val rule: ZoneRule, val etag: String?)
  */
 interface ZoneRuleRepository {
     suspend fun cached(type: String): CachedZoneRule?
+
+    /**
+     * La regla del tipo a lo largo del tiempo: `null` mientras no haya regla válida.
+     * Emite de nuevo cuando la sincronización la reemplaza o la retira (204), para
+     * que una pantalla ya abierta no siga calculando con una regla que ya no rige.
+     */
+    fun observe(type: String): Flow<CachedZoneRule?>
     suspend fun save(type: String, rule: ZoneRule, etag: String?)
 
     /** El servidor ya no tiene regla activa para el tipo (204): se deja de ofrecer la zona. */

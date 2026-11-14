@@ -25,6 +25,7 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertInstanceOf
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import co.agrovision.core.model.zone.SeverityBand
 import co.agrovision.core.model.zone.ZoneRule
@@ -363,6 +364,106 @@ class ScanViewModelTest {
         assertTrue(zone.isStale(inputs.copy(plantsPerHa = 4001)))
         // Densidad inválida en el formulario: el resultado ya no corresponde a lo visible.
         assertTrue(zone.isStale(null))
+    }
+
+    // ── La regla cambia con el resultado en pantalla ─────────────────────────
+
+    private fun identifiedWithEstimate(): ScanViewModel {
+        givenIdentified(classId = "Leaf rust")
+        zoneRules.rules["roya"] = ROYA_RULE
+        val subject = readyViewModel()
+        subject.onIntent(ScanIntent.Capture(image()))
+        subject.onIntent(ScanIntent.EstimateZone(SeverityBand.MUY_ALTA, incidencePct = 55, plantsPerHa = 4000))
+        assertNotNull((subject.state.value as ScanUiState.Identified).zone!!.estimate)
+        return subject
+    }
+
+    @Test
+    fun `un 204 con la pantalla abierta retira la zona y la estimacion`() = runTest(dispatcher) {
+        val subject = identifiedWithEstimate()
+
+        zoneRules.clear("roya")
+
+        val shown = assertInstanceOf(ScanUiState.Identified::class.java, subject.state.value)
+        assertNull(shown.zone)
+        // Sin disponibilidad no se puede seguir calculando con la regla retirada.
+        subject.onIntent(ScanIntent.EstimateZone(SeverityBand.POCA, incidencePct = 5, plantsPerHa = 4000))
+        assertNull((subject.state.value as ScanUiState.Identified).zone)
+    }
+
+    @Test
+    fun `una regla nueva reemplaza a la mostrada e invalida la estimacion`() = runTest(dispatcher) {
+        val subject = identifiedWithEstimate()
+        val updated = ROYA_RULE.copy(version = ROYA_RULE.version + 1, calibrada = true)
+
+        zoneRules.save("roya", updated, null)
+
+        val zone = (subject.state.value as ScanUiState.Identified).zone!!
+        assertEquals(updated, zone.rule)
+        assertNull(zone.estimate)
+        assertNull(zone.inputs)
+        // Conserva la densidad que el productor ya había editado.
+        assertEquals(4000, zone.plantsPerHa)
+
+        subject.onIntent(ScanIntent.EstimateZone(SeverityBand.MUY_ALTA, incidencePct = 55, plantsPerHa = 4000))
+        assertTrue((subject.state.value as ScanUiState.Identified).zone!!.estimate!!.calibrada)
+    }
+
+    @Test
+    fun `reescribir la misma regla conserva el resultado y su aviso de desactualizado`() = runTest(dispatcher) {
+        val subject = identifiedWithEstimate()
+        val before = (subject.state.value as ScanUiState.Identified).zone!!
+
+        zoneRules.save("roya", ROYA_RULE.copy(), null)
+        // Una regla de otro tipo tampoco afecta.
+        zoneRules.save("phoma", ROYA_RULE.copy(tipoEnfermedad = "phoma"), null)
+
+        val zone = (subject.state.value as ScanUiState.Identified).zone!!
+        assertEquals(before, zone)
+        val inputs = ZoneInputs(SeverityBand.MUY_ALTA, 55, 4000)
+        assertFalse(zone.isStale(inputs))
+        assertTrue(zone.isStale(inputs.copy(incidencePct = 60)))
+    }
+
+    @Test
+    fun `una regla que llega con la pantalla abierta ofrece la zona`() = runTest(dispatcher) {
+        givenIdentified(classId = "Leaf rust")
+        zoneRules.plants.value = 3300
+        val subject = readyViewModel()
+        subject.onIntent(ScanIntent.Capture(image()))
+        assertNull((subject.state.value as ScanUiState.Identified).zone)
+
+        zoneRules.save("roya", ROYA_RULE, null)
+
+        val zone = (subject.state.value as ScanUiState.Identified).zone!!
+        assertEquals(ROYA_RULE, zone.rule)
+        assertEquals(3300, zone.plantsPerHa)
+        assertNull(zone.estimate)
+    }
+
+    @Test
+    fun `al salir del resultado se deja de observar la regla`() = runTest(dispatcher) {
+        val subject = identifiedWithEstimate()
+        assertEquals(1, zoneRules.observers)
+
+        subject.onIntent(ScanIntent.DismissResult)
+        assertEquals(0, zoneRules.observers)
+        zoneRules.clear("roya")
+        assertInstanceOf(ScanUiState.Preview::class.java, subject.state.value)
+
+        // Un escaneo nuevo observa de nuevo, una sola vez.
+        zoneRules.rules["roya"] = ROYA_RULE
+        subject.onIntent(ScanIntent.Capture(image()))
+        assertEquals(1, zoneRules.observers)
+    }
+
+    @Test
+    fun `una clase sin tipo de regla no observa nada`() = runTest(dispatcher) {
+        givenIdentified(classId = "Deficiencia_Potasio")
+        val subject = readyViewModel()
+        subject.onIntent(ScanIntent.Capture(image()))
+
+        assertEquals(0, zoneRules.observers)
     }
 
     @Test

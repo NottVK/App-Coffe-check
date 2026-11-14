@@ -37,7 +37,6 @@ class SyncWorker @AssistedInject constructor(
     private val purgeExpired: PurgeExpiredCapturesUseCase,
     private val catalogSync: CatalogSync,
     private val catalogSeeder: CatalogSeeder,
-    private val zoneRuleSync: ZoneRuleSync,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
@@ -46,10 +45,10 @@ class SyncWorker @AssistedInject constructor(
         // retrasar las solicitudes de revisión que alguien está esperando.
         val outcome = syncPending(SyncTrigger.WORKER)
         val catalogOk = catalogSync.sync()
-        // Reglas de zona: después de la cola y del catálogo, y sin decidir el
-        // reintento. Un fallo conserva la última regla en caché; la próxima
-        // sincronización la vuelve a pedir con su ETag (304 si no cambió).
-        if (!zoneRuleSync.syncAll()) Log.i(TAG, "Reglas de zona sin actualizar; se usa la caché")
+        // Las reglas de zona NO van aquí: tienen su propio trabajo
+        // ([ZoneRuleWorker]). Seis consultas más antes de devolver `retry()`
+        // retrasaban el reintento de la cola y, con `KEEP`, descartaban las
+        // solicitudes que llegaran mientras tanto.
 
         // La purga corre tras una sincronización con éxito, no antes: borrar
         // capturas cuya subida todavía no se ha confirmado sería perder trabajo
@@ -79,6 +78,38 @@ class SyncWorker @AssistedInject constructor(
 
     private companion object {
         const val TAG = "AgroVision.SyncWorker"
+    }
+}
+
+/**
+ * Reglas de «zona a vigilar», en un trabajo **propio**.
+ *
+ * Separado de [SyncWorker] para que la cola del productor resuelva (y reintente)
+ * sin esperar a las reglas, y para que estas tengan su backoff y su restricción
+ * de red. [ZoneRuleSync.syncAll] ya lleva un presupuesto total corto y cancela
+ * la llamada HTTP en vuelo al agotarlo o si WorkManager detiene el trabajo.
+ *
+ * Un fallo conserva la última regla en caché. Los reintentos tienen tope: un
+ * tipo que el servidor rechaza siempre (400) no debe consultarse sin fin; la
+ * próxima apertura de la app encola el trabajo de nuevo.
+ */
+@HiltWorker
+class ZoneRuleWorker @AssistedInject constructor(
+    @Assisted context: Context,
+    @Assisted params: WorkerParameters,
+    private val zoneRuleSync: ZoneRuleSync,
+) : CoroutineWorker(context, params) {
+
+    override suspend fun doWork(): Result {
+        if (zoneRuleSync.syncAll()) return Result.success()
+        Log.i(TAG, "Reglas de zona sin actualizar; se usa la caché")
+        // `runAttemptCount` empieza en 0: se ejecuta como mucho MAX_ATTEMPTS veces.
+        return if (runAttemptCount + 1 < MAX_ATTEMPTS) Result.retry() else Result.failure()
+    }
+
+    internal companion object {
+        const val MAX_ATTEMPTS = 3
+        private const val TAG = "AgroVision.ZoneRules"
     }
 }
 

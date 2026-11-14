@@ -180,6 +180,9 @@ class ForegroundSyncTrigger @Inject constructor(
             val preferences = settings.current()
             scheduler.scheduleOpportunistic(preferences.syncNetworkPolicy)
             scheduler.scheduleModelCheck(preferences.syncNetworkPolicy)
+            // Reglas de zona: trabajo aparte, después de lo anterior; no compite
+            // con la cola ni condiciona sus reintentos.
+            scheduler.scheduleZoneRules(preferences.syncNetworkPolicy)
         }
     }
 

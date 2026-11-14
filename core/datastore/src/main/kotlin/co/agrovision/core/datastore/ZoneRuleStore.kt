@@ -12,7 +12,9 @@ import co.agrovision.core.model.zone.ZoneRule
 import co.agrovision.core.model.zone.ZoneRuleRow
 import co.agrovision.core.model.zone.isValidFor
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
@@ -36,7 +38,17 @@ class ZoneRuleStore @Inject constructor(
 
     override suspend fun cached(type: String): CachedZoneRule? {
         if (!TYPE_PATTERN.matches(type)) return null
-        val preferences = store.data.first()
+        return decode(store.data.first(), type)
+    }
+
+    override fun observe(type: String): Flow<CachedZoneRule?> {
+        if (!TYPE_PATTERN.matches(type)) return flowOf(null)
+        // DataStore emite ante cualquier clave (p. ej. la densidad de siembra):
+        // solo interesa cuando cambia la regla de este tipo.
+        return store.data.map { decode(it, type) }.distinctUntilChanged()
+    }
+
+    private fun decode(preferences: Preferences, type: String): CachedZoneRule? {
         val raw = preferences[ruleKey(type)] ?: return null
         // Un JSON ilegible (versión vieja, corrupción) se trata como «sin regla»:
         // mejor no mostrar zona que mostrar una inventada.

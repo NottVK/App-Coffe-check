@@ -8,6 +8,8 @@ import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFact
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
@@ -27,6 +29,7 @@ class ZoneRuleSyncTest {
         val rows = mutableMapOf<String, CachedZoneRule>()
         var saves = 0
         override suspend fun cached(type: String) = rows[type]
+        override fun observe(type: String): Flow<CachedZoneRule?> = kotlinx.coroutines.flow.flow { emit(rows[type]) }
         override suspend fun save(type: String, rule: ZoneRule, etag: String?) { saves++; rows[type] = CachedZoneRule(rule, etag) }
         override suspend fun clear(type: String) { rows.remove(type) }
         private val plants = MutableStateFlow(5000)
@@ -145,5 +148,127 @@ class ZoneRuleSyncTest {
         } finally {
             other.shutdown()
         }
+    }
+
+    // ── Respuestas de error enormes (#1) ─────────────────────────────────────
+    //
+    // El cuerpo se sirve a 16 KB cada 250 ms: bajarlo entero (lo que hacía Retrofit
+    // con toda respuesta no exitosa) tardaría más de un minuto. Si `sync` vuelve
+    // enseguida es que lo cerró sin leerlo.
+
+    private val oldRule = CachedZoneRule(ZoneRule("roya", 1, false, listOf(ZoneRuleRow(1, 100.0, 100.0, 0.0, 1.0))), "\"x\"")
+    private val hugeBytes = 4 * 1024 * 1024
+
+    private fun MockResponse.slow() = throttleBody(16 * 1024, 250, java.util.concurrent.TimeUnit.MILLISECONDS)
+
+    private fun assertFailsFastKeepingCache(response: MockResponse) = runBlocking {
+        rules.rows["roya"] = oldRule
+        server.enqueue(response.slow())
+        val started = System.nanoTime()
+
+        assertFalse(sync.sync("roya"))
+
+        val elapsedMs = (System.nanoTime() - started) / 1_000_000
+        assertTrue(elapsedMs < 10_000, "tardó $elapsedMs ms: el cuerpo de error se descargó")
+        assertEquals(oldRule, rules.rows["roya"])
+    }
+
+    private fun gzip(bytes: ByteArray): okio.Buffer {
+        val out = okio.Buffer()
+        java.util.zip.GZIPOutputStream(out.outputStream()).use { it.write(bytes) }
+        return out
+    }
+
+    @Test fun `un 500 enorme con Content-Length no se descarga`() {
+        val response = MockResponse().setResponseCode(500).setBody("x".repeat(hugeBytes))
+        assertEquals(hugeBytes.toString(), response.headers["Content-Length"])
+        assertFailsFastKeepingCache(response)
+    }
+
+    @Test fun `un 500 enorme chunked no se descarga`() {
+        val response = MockResponse().setResponseCode(500).setChunkedBody("x".repeat(hugeBytes), 8192)
+        assertNull(response.headers["Content-Length"])
+        assertFailsFastKeepingCache(response)
+    }
+
+    @Test fun `un 500 enorme con gzip no se descarga ni se descomprime`() {
+        // Bytes aleatorios: no comprimen, así que también pesan en la red.
+        val compressed = gzip(java.util.Random(7).let { r -> ByteArray(hugeBytes).also(r::nextBytes) })
+        assertTrue(compressed.size > hugeBytes / 2)
+        assertFailsFastKeepingCache(
+            MockResponse().setResponseCode(500).addHeader("Content-Encoding", "gzip").setBody(compressed),
+        )
+        assertEquals("gzip", server.takeRequest().getHeader("Accept-Encoding"))
+    }
+
+    @Test fun `un 400 enorme tampoco se descarga`() =
+        assertFailsFastKeepingCache(MockResponse().setResponseCode(400).setBody("x".repeat(hugeBytes)))
+
+    @Test fun `un 200 gzip que se expande por encima del tope se descarta`() = runBlocking {
+        // Pocos KB en la red, 8 MB descomprimidos: el tope cuenta bytes ya expandidos.
+        val bomb = gzip((body + " ".repeat(8 * 1024 * 1024)).toByteArray())
+        assertTrue(bomb.size < ZoneRuleSync.MAX_BODY_BYTES)
+        server.enqueue(MockResponse().addHeader("Content-Encoding", "gzip").setBody(bomb))
+        assertFalse(sync.sync("roya"))
+        assertNull(rules.rows["roya"])
+
+        // Y un gzip dentro del tope sí se acepta.
+        server.enqueue(MockResponse().addHeader("Content-Encoding", "gzip").setBody(gzip(body.toByteArray())).addHeader("ETag", "\"g\""))
+        assertTrue(sync.sync("roya"))
+        assertEquals("\"g\"", rules.rows.getValue("roya").etag)
+    }
+
+    @Test fun `un cuerpo justo en el tope se acepta y un byte mas no`() = runBlocking {
+        val exact = body + " ".repeat(ZoneRuleSync.MAX_BODY_BYTES.toInt() - body.toByteArray().size)
+        server.enqueue(MockResponse().setChunkedBody(exact, 4096))
+        assertTrue(sync.sync("roya"))
+        rules.rows.clear()
+        server.enqueue(MockResponse().setChunkedBody("$exact ", 4096))
+        assertFalse(sync.sync("roya"))
+        assertNull(rules.rows["roya"])
+    }
+
+    // ── Presupuesto total y cancelación (#2) ─────────────────────────────────
+
+    @Test fun `syncAll respeta el presupuesto total y cancela la llamada en vuelo`() = runBlocking {
+        rules.rows["roya"] = oldRule
+        // El servidor acepta la petición y no responde nunca.
+        server.enqueue(MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.NO_RESPONSE))
+        val started = System.nanoTime()
+
+        assertFalse(sync.syncAll(budgetMillis = 400))
+
+        val elapsedMs = (System.nanoTime() - started) / 1_000_000
+        assertTrue(elapsedMs < 5_000, "tardó $elapsedMs ms: el presupuesto no cortó la llamada")
+        // Solo salió la primera petición: los demás tipos no se consultaron.
+        assertEquals(1, server.requestCount)
+        assertEquals(oldRule, rules.rows["roya"])
+    }
+
+    @Test fun `el presupuesto corta tambien un cuerpo 200 que llega a cuentagotas`() = runBlocking {
+        server.enqueue(MockResponse().setBody(body).addHeader("ETag", "\"lento\"").throttleBody(8, 1, java.util.concurrent.TimeUnit.SECONDS))
+        val started = System.nanoTime()
+
+        assertFalse(sync.syncAll(types = listOf("roya"), budgetMillis = 400))
+
+        assertTrue((System.nanoTime() - started) / 1_000_000 < 5_000)
+        assertNull(rules.rows["roya"])
+    }
+
+    @Test fun `cancelar la corrutina cancela la llamada HTTP`() = runBlocking {
+        server.enqueue(MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.NO_RESPONSE))
+        val job = launch(Dispatchers.Default) { sync.sync("roya") }
+        server.takeRequest()
+        val started = System.nanoTime()
+
+        job.cancelAndJoin()
+
+        assertTrue((System.nanoTime() - started) / 1_000_000 < 5_000)
+        assertTrue(job.isCancelled)
+    }
+
+    @Test fun `dentro del presupuesto syncAll sigue siendo exitoso`() = runBlocking {
+        repeat(6) { server.enqueue(MockResponse().setResponseCode(204)) }
+        assertTrue(sync.syncAll())
     }
 }
