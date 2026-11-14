@@ -10,6 +10,7 @@ import co.agrovision.core.model.port.ZoneRuleRepository
 import co.agrovision.core.model.zone.ZoneDefaults
 import co.agrovision.core.model.zone.ZoneRule
 import co.agrovision.core.model.zone.ZoneRuleRow
+import co.agrovision.core.model.zone.isValidFor
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -46,11 +47,16 @@ class ZoneRuleStore @Inject constructor(
         } catch (_: IllegalArgumentException) {
             return null
         }
+        // JSON legible pero semánticamente corrupto (otro tipo, radios negativos,
+        // tabla incoherente): también «sin regla», y sin devolver su ETag, para
+        // que la siguiente descarga sea incondicional y lo reemplace.
+        if (!rule.isValidFor(type)) return null
         return CachedZoneRule(rule, preferences[etagKey(type)])
     }
 
     override suspend fun save(type: String, rule: ZoneRule, etag: String?) {
         require(TYPE_PATTERN.matches(type)) { "Tipo de regla inválido" }
+        require(rule.isValidFor(type)) { "Regla de zona inválida para $type" }
         val encoded = json.encodeToString(StoredZoneRule.serializer(), StoredZoneRule.from(rule))
         store.edit { preferences ->
             preferences[ruleKey(type)] = encoded

@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 
 class ZoneRuleTest {
 
@@ -102,5 +103,74 @@ class ZoneRuleTest {
     @Test
     fun `valores representativos del selector de severidad`() {
         assertEquals(listOf(5.0, 20.0, 45.0, 75.0), SeverityBand.entries.map { it.representativePct })
+    }
+
+    // ── Validación (espejo de validar-filas.ts) ─────────────────────────────
+
+    private val valid = rule.copy(filas = rule.filas.sortedBy { it.orden })
+
+    private fun withRow(index: Int, transform: (ZoneRuleRow) -> ZoneRuleRow) =
+        valid.copy(filas = valid.filas.mapIndexed { i, row -> if (i == index) transform(row) else row })
+
+    @Test
+    fun `regla coherente y del tipo pedido es valida`() {
+        assertTrue(valid.isValidFor("roya"))
+        assertFalse(valid.isValidFor("phoma"))
+        assertFalse(valid.copy(version = 0).isValidFor("roya"))
+        // Desordenada: el orden debe coincidir con la posición.
+        assertFalse(rule.isValidFor("roya"))
+    }
+
+    @Test
+    fun `umbrales y radios decrecientes entre filas se rechazan`() {
+        // Más daño con menos zona: radio 10-20 seguido de 1-2.
+        assertFalse(withRow(1) { it.copy(radioMinM = 0.0, radioMaxM = 2.0) }.isValidFor("roya"))
+        assertFalse(withRow(2) { it.copy(radioMinM = 2.0) }.isValidFor("roya"))
+        assertFalse(withRow(1) { it.copy(sevMax = 5.0) }.isValidFor("roya"))
+        assertFalse(withRow(1) { it.copy(incMax = 15.0) }.isValidFor("roya"))
+        // Iguales sí se permiten (no decreciente).
+        assertTrue(withRow(1) { it.copy(sevMax = 10.0, radioMinM = 0.0) }.isValidFor("roya"))
+    }
+
+    @Test
+    fun `orden consecutivo desde 1, ultima fila 100 por 100 y maximo 12 filas`() {
+        assertFalse(withRow(0) { it.copy(orden = 0) }.isValidFor("roya"))
+        assertFalse(valid.copy(filas = valid.filas.filter { it.orden != 2 }).isValidFor("roya"))
+        assertFalse(withRow(3) { it.copy(incMax = 99.0) }.isValidFor("roya"))
+        assertFalse(withRow(3) { it.copy(sevMax = 99.0) }.isValidFor("roya"))
+        assertFalse(valid.copy(filas = emptyList()).isValidFor("roya"))
+        val twelve = List(12) { ZoneRuleRow(it + 1, 100.0, 100.0, 0.0, 1.0) }
+        assertTrue(valid.copy(filas = twelve).isValidFor("roya"))
+        assertFalse(valid.copy(filas = twelve + ZoneRuleRow(13, 100.0, 100.0, 0.0, 1.0)).isValidFor("roya"))
+    }
+
+    @Test
+    fun `radios fuera de 0 a 500, minimo mayor que maximo y valores no finitos se rechazan`() {
+        assertFalse(withRow(0) { it.copy(radioMinM = -1.0) }.isValidFor("roya"))
+        assertFalse(withRow(3) { it.copy(radioMaxM = 500.5) }.isValidFor("roya"))
+        assertTrue(withRow(3) { it.copy(radioMaxM = 500.0) }.isValidFor("roya"))
+        assertFalse(withRow(0) { it.copy(radioMinM = 4.0) }.isValidFor("roya"))
+        assertFalse(withRow(0) { it.copy(sevMax = Double.NaN) }.isValidFor("roya"))
+        assertFalse(withRow(0) { it.copy(sevMax = 0.0) }.isValidFor("roya"))
+        assertFalse(withRow(3) { it.copy(radioMaxM = Double.POSITIVE_INFINITY) }.isValidFor("roya"))
+    }
+
+    @Test
+    fun `el peor caso de plantas cabe en Int y fuera de rango no satura en silencio`() {
+        // 500 m a 1 000 000 plantas/ha = 78 539 816,3...
+        assertEquals(78_539_816, plantsInRadius(500.0, ZoneDefaults.MAX_PLANTS_PER_HA))
+        assertThrows<IllegalArgumentException> { plantsInRadius(10_000.0, ZoneDefaults.MAX_PLANTS_PER_HA) }
+        assertThrows<IllegalArgumentException> { plantsInRadius(-1.0, 5000) }
+        assertThrows<IllegalArgumentException> { plantsInRadius(10.0, 0) }
+        assertThrows<IllegalArgumentException> { plantsInRadius(10.0, ZoneDefaults.MAX_PLANTS_PER_HA + 1) }
+    }
+
+    @Test
+    fun `densidad escrita valida o nula`() {
+        assertEquals(3300, ZoneDefaults.parsePlantsPerHa("3300"))
+        assertNull(ZoneDefaults.parsePlantsPerHa(""))
+        assertNull(ZoneDefaults.parsePlantsPerHa("0"))
+        assertNull(ZoneDefaults.parsePlantsPerHa("1000001"))
+        assertEquals(1_000_000, ZoneDefaults.parsePlantsPerHa("1000000"))
     }
 }

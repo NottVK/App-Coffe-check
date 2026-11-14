@@ -58,4 +58,7 @@
     <string name="zona_sin_calibrar">Estimación sin calibrar (regla v%1$d)</string>
     <string name="zona_calibrada">Regla v%1$d, calibrada por un agrónomo</string>
     <string name="zona_cerrar">Cerrar</string>
+    <string name="zona_densidad_invalida">Corrige las plantas por hectárea para calcular.</string>
+    <string name="zona_resultado_datos">Calculado con: daño %1$s, %2$d de cada 100 plantas, %3$d plantas por hectárea</string>
+    <string name="zona_resultado_desactualizado">Desactualizado: cambiaste los datos. Pulsa «Calcular zona» de nuevo.</string>
 </resources>

@@ -48,7 +48,7 @@ class ZoneRuleSyncTest {
     @AfterEach fun tearDown() { server.shutdown() }
 
     private val body = """{"tipoEnfermedad":"roya","version":2,"calibrada":false,"filas":[
-        {"orden":2,"sevMax":30,"incMax":40,"radioMinM":3,"radioMaxM":8},
+        {"orden":2,"sevMax":100,"incMax":100,"radioMinM":3,"radioMaxM":8},
         {"orden":1,"sevMax":10,"incMax":20,"radioMinM":0,"radioMaxM":3}]}"""
 
     @Test fun `200 guarda con etag, 304 no escribe y envia If-None-Match`() = runBlocking {
@@ -87,8 +87,16 @@ class ZoneRuleSyncTest {
         server.enqueue(MockResponse().setBody(body.replace("\"roya\"", "\"phoma\"")))
         // Radio mínimo mayor que el máximo.
         server.enqueue(MockResponse().setBody(body.replace("\"radioMinM\":3", "\"radioMinM\":9")))
+        // Más daño, menos zona: radios decrecientes entre filas.
+        server.enqueue(MockResponse().setBody(body.replace("\"radioMinM\":3,\"radioMaxM\":8", "\"radioMinM\":0,\"radioMaxM\":1")))
+        // Última fila sin cobertura 100/100.
+        server.enqueue(MockResponse().setBody(body.replace("\"sevMax\":100", "\"sevMax\":90")))
+        // Orden no consecutivo desde 1.
+        server.enqueue(MockResponse().setBody(body.replace("\"orden\":2", "\"orden\":3")))
+        // Radio por encima de los 500 m del contrato.
+        server.enqueue(MockResponse().setBody(body.replace("\"radioMaxM\":8", "\"radioMaxM\":501")))
 
-        repeat(5) { assertFalse(sync.sync("roya")) }
+        repeat(9) { assertFalse(sync.sync("roya")) }
         assertEquals(old, rules.rows["roya"])
     }
 
@@ -112,5 +120,30 @@ class ZoneRuleSyncTest {
             listOf("roya", "cercospora", "phoma", "antracnosis", "minador", "hormigas").map { "/api/public/v1/zone-rules?tipo=$it" },
             paths,
         )
+    }
+
+    @Test fun `304 sin regla valida en cache no cuenta como exito`() = runBlocking {
+        // Sin caché no se envía ETag: un 304 es una respuesta errónea del servidor o un proxy.
+        server.enqueue(MockResponse().setResponseCode(304))
+        assertFalse(sync.sync("roya"))
+        assertNull(server.takeRequest().getHeader("If-None-Match"))
+        assertNull(rules.rows["roya"])
+    }
+
+    @Test fun `no sigue redirecciones a otro host y conserva la cache`() = runBlocking {
+        val other = MockWebServer()
+        other.start()
+        try {
+            val old = CachedZoneRule(ZoneRule("roya", 1, false, listOf(ZoneRuleRow(1, 100.0, 100.0, 0.0, 1.0))), "\"x\"")
+            rules.rows["roya"] = old
+            other.enqueue(MockResponse().setResponseCode(204))
+            server.enqueue(MockResponse().setResponseCode(302).addHeader("Location", other.url("/api/public/v1/zone-rules?tipo=roya")))
+
+            assertFalse(sync.sync("roya"))
+            assertEquals(0, other.requestCount)
+            assertEquals(old, rules.rows["roya"])
+        } finally {
+            other.shutdown()
+        }
     }
 }

@@ -116,13 +116,28 @@ sealed interface ScanUiState {
     data class Error(val message: UiText, val recoverable: Boolean) : ScanUiState
 }
 
-/** Regla de zona disponible en caché para la clase detectada, y la última estimación. */
+/**
+ * Regla de zona disponible en caché para la clase detectada, y la última
+ * estimación junto con los datos con que se calculó ([inputs]): el resultado
+ * nunca se muestra desligado de sus parámetros.
+ */
 @Immutable
 data class ZoneAvailability(
     val rule: ZoneRule,
     val plantsPerHa: Int,
     val estimate: ZoneEstimate? = null,
-)
+    val inputs: ZoneInputs? = null,
+) {
+    /**
+     * `true` si hay resultado y los controles actuales ([form]; `null` si están
+     * incompletos o inválidos) ya no son los del cálculo: está desactualizado.
+     */
+    fun isStale(form: ZoneInputs?): Boolean = estimate != null && inputs != form
+}
+
+/** Valores de los controles manuales con que se calcula una estimación. */
+@Immutable
+data class ZoneInputs(val severity: SeverityBand, val incidencePct: Int, val plantsPerHa: Int)
 
 /**
  * Guía de encuadre. Es lo que impone la disciplina de acercarse y encuadrar antes

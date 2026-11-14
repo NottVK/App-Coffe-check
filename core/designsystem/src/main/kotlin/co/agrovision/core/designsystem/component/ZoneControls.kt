@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,10 +30,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -191,15 +190,26 @@ private fun RepeatingStepButton(
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val currentStep by rememberUpdatedState(onStep)
-    // Si la pulsación ya repitió, el clic al soltar no suma otro paso.
-    var repeated by remember { mutableStateOf(false) }
+    val gate = remember { HoldClickGate() }
+
+    // La supresión se ata al gesto físico: cada pulsación empieza limpia y un
+    // gesto cancelado (dedo fuera, botón deshabilitado en el extremo) la retira.
+    // Así una activación de TalkBack, que no genera pulsación, siempre da un paso.
+    LaunchedEffect(interaction) {
+        interaction.interactions.collect { event ->
+            when (event) {
+                is PressInteraction.Press -> gate.onPress()
+                is PressInteraction.Cancel -> gate.onCancel()
+            }
+        }
+    }
+    LaunchedEffect(enabled) { if (!enabled) gate.onCancel() }
 
     LaunchedEffect(pressed, enabled) {
         if (!pressed || !enabled) return@LaunchedEffect
-        repeated = false
         delay(HOLD_START_MS)
         while (true) {
-            repeated = true
+            gate.onRepeat()
             haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             currentStep(true)
             delay(HOLD_REPEAT_MS)
@@ -208,7 +218,7 @@ private fun RepeatingStepButton(
 
     FilledTonalIconButton(
         onClick = {
-            if (repeated) { repeated = false; return@FilledTonalIconButton }
+            if (!gate.consumeClick()) return@FilledTonalIconButton
             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
             currentStep(false)
         },
@@ -221,27 +231,42 @@ private fun RepeatingStepButton(
 }
 
 /**
- * Densidad de siembra editable. Solo notifica valores válidos
- * (entre [ZoneDefaults.MIN_PLANTS_PER_HA] y [ZoneDefaults.MAX_PLANTS_PER_HA]).
+ * Supresión del clic que cierra una pulsación mantenida que ya repitió.
+ *
+ * Solo el clic que sigue a *ese* gesto se descarta: una nueva pulsación o una
+ * cancelación limpian el estado, y un clic sin pulsación previa (activación
+ * accesible) siempre cuenta.
+ */
+internal class HoldClickGate {
+    private var gestureRepeated = false
+
+    fun onPress() { gestureRepeated = false }
+    fun onRepeat() { gestureRepeated = true }
+    fun onCancel() { gestureRepeated = false }
+
+    /** `true` si el clic debe dar un paso; consume la supresión pendiente. */
+    fun consumeClick(): Boolean {
+        val step = !gestureRepeated
+        gestureRepeated = false
+        return step
+    }
+}
+
+/**
+ * Densidad de siembra editable. Texto controlado por el llamador: la validez
+ * ([ZoneDefaults.parsePlantsPerHa]) vive en el estado del formulario, para que
+ * nadie calcule con un valor distinto del que se ve.
  */
 @Composable
 fun PlantsPerHaField(
-    value: Int,
-    onValueChange: (Int) -> Unit,
+    text: String,
+    onTextChange: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var text by remember(value) { mutableStateOf(value.toString()) }
-    val parsed = text.toIntOrNull()
-    val valid = parsed != null && parsed in ZoneDefaults.MIN_PLANTS_PER_HA..ZoneDefaults.MAX_PLANTS_PER_HA
+    val valid = ZoneDefaults.parsePlantsPerHa(text) != null
     OutlinedTextField(
         value = text,
-        onValueChange = { input ->
-            val digits = input.filter(Char::isDigit).take(7)
-            text = digits
-            digits.toIntOrNull()
-                ?.takeIf { it in ZoneDefaults.MIN_PLANTS_PER_HA..ZoneDefaults.MAX_PLANTS_PER_HA }
-                ?.let(onValueChange)
-        },
+        onValueChange = { input -> onTextChange(input.filter(Char::isDigit).take(7)) },
         label = { Text(stringResource(R.string.zona_plantas_ha)) },
         supportingText = {
             Text(stringResource(if (valid) R.string.zona_plantas_ha_ayuda else R.string.zona_plantas_ha_invalido))
@@ -254,6 +279,10 @@ fun PlantsPerHaField(
             .defaultMinSize(minHeight = AgroTheme.dimensions.minTouchTarget),
     )
 }
+
+/** Etiqueta visible del rango de severidad, para resumir con qué datos se calculó. */
+@Composable
+fun severityBandLabel(band: SeverityBand): String = stringResource(band.labelRes())
 
 private fun SeverityBand.labelRes(): Int = when (this) {
     SeverityBand.POCA -> R.string.zona_severidad_poca

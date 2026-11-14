@@ -63,11 +63,61 @@ fun estimateZone(
     )
 }
 
-/** Plantas dentro de un círculo de radio [radiusM] con una densidad en plantas/ha (1 ha = 10 000 m²). */
-fun plantsInRadius(radiusM: Double, plantsPerHa: Int): Int =
-    (PI * radiusM * radiusM * plantsPerHa / SQUARE_METERS_PER_HA).roundToInt()
+/**
+ * Plantas dentro de un círculo de radio [radiusM] con una densidad en plantas/ha (1 ha = 10 000 m²).
+ *
+ * Radio y densidad van acotados por [ZoneRuleLimits.MAX_RADIUS_M] y
+ * [ZoneDefaults.MAX_PLANTS_PER_HA]: el peor caso (500 m a 1 000 000 plantas/ha,
+ * unos 78,5 millones) cabe holgado en un `Int`. Fuera de esos límites se lanza
+ * una excepción en vez de saturar en silencio a `Int.MAX_VALUE`.
+ */
+fun plantsInRadius(radiusM: Double, plantsPerHa: Int): Int {
+    require(radiusM.isFinite() && radiusM in 0.0..ZoneRuleLimits.MAX_RADIUS_M) { "Radio fuera de rango: $radiusM" }
+    require(plantsPerHa in ZoneDefaults.MIN_PLANTS_PER_HA..ZoneDefaults.MAX_PLANTS_PER_HA) {
+        "Densidad fuera de rango: $plantsPerHa"
+    }
+    return (PI * radiusM * radiusM * plantsPerHa / SQUARE_METERS_PER_HA).roundToInt()
+}
 
 private const val SQUARE_METERS_PER_HA = 10_000.0
+
+/** Límites del contrato de la tabla; espejo de `validar-filas.ts` en el API. */
+object ZoneRuleLimits {
+    const val MAX_ROWS = 12
+    const val MAX_RADIUS_M = 500.0
+    const val FULL_COVERAGE_PCT = 100.0
+}
+
+/**
+ * `true` si la regla cumple el contrato de `validar-filas.ts` y es del tipo [type].
+ * Única validación de dominio: la usan la descarga, y la caché al leer y al escribir.
+ *
+ * - Entre 1 y [ZoneRuleLimits.MAX_ROWS] filas, con `orden` 1..n consecutivo en
+ *   la posición de la lista (la lista debe venir ordenada por `orden`).
+ * - `sevMax` e `incMax` en (0, 100]; radios en [0, [ZoneRuleLimits.MAX_RADIUS_M]]
+ *   y `radioMinM <= radioMaxM`.
+ * - Umbrales y radios no decrecientes entre filas: más daño nunca da menos zona.
+ * - La última fila cubre 100/100, así que toda observación cae en alguna fila.
+ */
+fun ZoneRule.isValidFor(type: String): Boolean {
+    if (tipoEnfermedad != type || version < 1) return false
+    if (filas.isEmpty() || filas.size > ZoneRuleLimits.MAX_ROWS) return false
+    filas.forEachIndexed { i, row ->
+        if (row.orden != i + 1) return false
+        if (!row.sevMax.isPercent() || !row.incMax.isPercent()) return false
+        if (!row.radioMinM.isRadius() || !row.radioMaxM.isRadius() || row.radioMinM > row.radioMaxM) return false
+        if (i > 0) {
+            val prev = filas[i - 1]
+            if (row.sevMax < prev.sevMax || row.incMax < prev.incMax) return false
+            if (row.radioMinM < prev.radioMinM || row.radioMaxM < prev.radioMaxM) return false
+        }
+    }
+    val last = filas.last()
+    return last.sevMax == ZoneRuleLimits.FULL_COVERAGE_PCT && last.incMax == ZoneRuleLimits.FULL_COVERAGE_PCT
+}
+
+private fun Double.isPercent() = isFinite() && this > 0.0 && this <= ZoneRuleLimits.FULL_COVERAGE_PCT
+private fun Double.isRadius() = isFinite() && this in 0.0..ZoneRuleLimits.MAX_RADIUS_M
 
 /**
  * Tipos de regla que publica el API y su equivalencia con las clases del modelo.
@@ -121,4 +171,8 @@ object ZoneDefaults {
     const val PLANTS_PER_HA = 5_000
     const val MIN_PLANTS_PER_HA = 1
     const val MAX_PLANTS_PER_HA = 1_000_000
+
+    /** Densidad escrita por el productor, o `null` si no es un entero en rango. */
+    fun parsePlantsPerHa(text: String): Int? =
+        text.toIntOrNull()?.takeIf { it in MIN_PLANTS_PER_HA..MAX_PLANTS_PER_HA }
 }

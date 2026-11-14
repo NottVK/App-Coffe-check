@@ -15,14 +15,19 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableIntState
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import co.agrovision.core.designsystem.component.PlantsPer100Counter
 import co.agrovision.core.designsystem.component.PlantsPerHaField
@@ -31,9 +36,10 @@ import co.agrovision.core.designsystem.component.SecondaryFieldButton
 import co.agrovision.core.designsystem.component.SeverityBandSelector
 import co.agrovision.core.designsystem.component.StatusPill
 import co.agrovision.core.designsystem.component.StatusTone
+import co.agrovision.core.designsystem.component.severityBandLabel
 import co.agrovision.core.designsystem.theme.AgroTheme
 import co.agrovision.core.model.zone.SeverityBand
-import co.agrovision.core.model.zone.ZoneEstimate
+import co.agrovision.core.model.zone.ZoneDefaults
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.util.Locale
@@ -41,35 +47,67 @@ import java.util.Locale
 /**
  * Botón «Estimar zona a vigilar» y su hoja de controles manuales. El cálculo lo
  * hace el ViewModel con la regla en caché; aquí solo se recogen los tres valores.
+ *
+ * El formulario vive aquí y no dentro de la hoja: cerrar y reabrir conserva lo
+ * elegido, y si los controles ya no son los del cálculo el resultado se marca
+ * como desactualizado (dentro y fuera de la hoja).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ZoneSection(zone: ZoneAvailability, onIntent: (ScanIntent) -> Unit) {
     var open by rememberSaveable { mutableStateOf(false) }
+    val form = rememberZoneForm(zone)
 
     SecondaryFieldButton(
         text = stringResource(R.string.zona_estimar),
         icon = Icons.Filled.MyLocation,
         onClick = { open = true },
     )
-    zone.estimate?.let { ZoneResult(it) }
+    ZoneResult(zone, stale = zone.isStale(form.inputs), announce = false)
 
     if (open) {
         ModalBottomSheet(
             onDismissRequest = { open = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         ) {
-            ZoneControlsSheet(zone, onIntent, onClose = { open = false })
+            ZoneControlsSheet(zone, form, onIntent, onClose = { open = false })
         }
     }
 }
 
-@Composable
-private fun ZoneControlsSheet(zone: ZoneAvailability, onIntent: (ScanIntent) -> Unit, onClose: () -> Unit) {
-    var severity by rememberSaveable { mutableStateOf<SeverityBand?>(null) }
-    var incidence by rememberSaveable { mutableIntStateOf(0) }
-    var plantsPerHa by rememberSaveable(zone.plantsPerHa) { mutableIntStateOf(zone.plantsPerHa) }
+/** Estado del formulario: texto de la densidad incluido, para validar lo que se ve. */
+private class ZoneFormState(
+    severityState: MutableState<SeverityBand?>,
+    incidenceState: MutableIntState,
+    plantsTextState: MutableState<String>,
+) {
+    var severity by severityState
+    var incidence by incidenceState
+    var plantsText by plantsTextState
 
+    /** Densidad válida, o `null`: con `null` no se puede calcular. */
+    val plantsPerHa: Int? get() = ZoneDefaults.parsePlantsPerHa(plantsText)
+
+    /** Valores completos y válidos para calcular, o `null`. */
+    val inputs: ZoneInputs? get() = severity?.let { s -> plantsPerHa?.let { ZoneInputs(s, incidence, it) } }
+}
+
+@Composable
+private fun rememberZoneForm(zone: ZoneAvailability): ZoneFormState {
+    // Si ya hay un cálculo, el formulario parte de sus datos.
+    val severity = rememberSaveable { mutableStateOf(zone.inputs?.severity) }
+    val incidence = rememberSaveable { mutableIntStateOf(zone.inputs?.incidencePct ?: 0) }
+    val plantsText = rememberSaveable { mutableStateOf((zone.inputs?.plantsPerHa ?: zone.plantsPerHa).toString()) }
+    return remember(severity, incidence, plantsText) { ZoneFormState(severity, incidence, plantsText) }
+}
+
+@Composable
+private fun ZoneControlsSheet(
+    zone: ZoneAvailability,
+    form: ZoneFormState,
+    onIntent: (ScanIntent) -> Unit,
+    onClose: () -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -85,35 +123,53 @@ private fun ZoneControlsSheet(zone: ZoneAvailability, onIntent: (ScanIntent) -> 
             modifier = Modifier.semantics { heading() },
         )
         Text(stringResource(R.string.zona_pregunta_severidad), style = MaterialTheme.typography.titleMedium)
-        SeverityBandSelector(selected = severity, onSelect = { severity = it })
+        SeverityBandSelector(selected = form.severity, onSelect = { form.severity = it })
 
         Text(stringResource(R.string.zona_pregunta_incidencia), style = MaterialTheme.typography.titleMedium)
-        PlantsPer100Counter(value = incidence, onValueChange = { incidence = it })
+        PlantsPer100Counter(value = form.incidence, onValueChange = { form.incidence = it })
 
-        PlantsPerHaField(value = plantsPerHa, onValueChange = { plantsPerHa = it })
+        PlantsPerHaField(text = form.plantsText, onTextChange = { form.plantsText = it })
 
-        if (severity == null) {
+        val hint = when {
+            form.severity == null -> R.string.zona_elige_severidad
+            form.plantsPerHa == null -> R.string.zona_densidad_invalida
+            else -> null
+        }
+        hint?.let {
             Text(
-                stringResource(R.string.zona_elige_severidad),
+                stringResource(it),
                 style = MaterialTheme.typography.bodyMedium,
                 color = AgroTheme.semantic.mutedText,
             )
         }
+        val inputs = form.inputs
         PrimaryFieldButton(
             text = stringResource(R.string.zona_calcular),
-            enabled = severity != null,
+            // Sin densidad válida no se calcula: nunca con un valor distinto del visible.
+            enabled = inputs != null,
             onClick = {
-                severity?.let { onIntent(ScanIntent.EstimateZone(it, incidence, plantsPerHa)) }
+                inputs?.let { onIntent(ScanIntent.EstimateZone(it.severity, it.incidencePct, it.plantsPerHa)) }
             },
         )
-        zone.estimate?.let { ZoneResult(it) }
+        ZoneResult(zone, stale = zone.isStale(inputs), announce = true)
         SecondaryFieldButton(text = stringResource(R.string.zona_cerrar), onClick = onClose)
     }
 }
 
+/**
+ * Resultado con los datos con que se calculó. [announce]: región viva para que
+ * el lector de pantalla lea la nueva estimación (o el aviso de desactualizada)
+ * al pulsar «Calcular»; solo en la hoja, para no anunciarlo dos veces.
+ */
 @Composable
-private fun ZoneResult(estimate: ZoneEstimate) {
-    Column(verticalArrangement = Arrangement.spacedBy(AgroTheme.dimensions.gutterTight)) {
+private fun ZoneResult(zone: ZoneAvailability, stale: Boolean, announce: Boolean) {
+    val estimate = zone.estimate ?: return
+    Column(
+        verticalArrangement = Arrangement.spacedBy(AgroTheme.dimensions.gutterTight),
+        modifier = Modifier.semantics(mergeDescendants = true) {
+            if (announce) liveRegion = LiveRegionMode.Polite
+        },
+    ) {
         Text(
             stringResource(R.string.zona_resultado_radio, formatMeters(estimate.radioMinM), formatMeters(estimate.radioMaxM)),
             style = MaterialTheme.typography.titleMedium,
@@ -122,6 +178,21 @@ private fun ZoneResult(estimate: ZoneEstimate) {
             stringResource(R.string.zona_resultado_plantas, estimate.plantasMin, estimate.plantasMax),
             style = MaterialTheme.typography.bodyLarge,
         )
+        zone.inputs?.let { inputs ->
+            Text(
+                stringResource(
+                    R.string.zona_resultado_datos,
+                    severityBandLabel(inputs.severity),
+                    inputs.incidencePct,
+                    inputs.plantsPerHa,
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = AgroTheme.semantic.mutedText,
+            )
+        }
+        if (stale) {
+            StatusPill(text = stringResource(R.string.zona_resultado_desactualizado), tone = StatusTone.WARNING)
+        }
         // Aviso fijo: mientras la regla no esté calibrada, el número es un criterio experto, no una medición.
         StatusPill(
             text = if (estimate.calibrada) stringResource(R.string.zona_calibrada, estimate.reglaVersion)

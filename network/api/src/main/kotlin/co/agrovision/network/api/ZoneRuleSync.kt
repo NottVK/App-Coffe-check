@@ -6,6 +6,7 @@ import co.agrovision.core.model.port.ZoneRuleRepository
 import co.agrovision.core.model.zone.ZoneRule
 import co.agrovision.core.model.zone.ZoneRuleRow
 import co.agrovision.core.model.zone.ZoneRuleTypes
+import co.agrovision.core.model.zone.isValidFor
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -13,6 +14,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import okhttp3.OkHttpClient
 import okhttp3.ResponseBody
 import okio.Buffer
 import retrofit2.Response
@@ -56,6 +58,10 @@ internal data class ZoneRuleRowDto(
  * catálogo. Un fallo aquí no toca la caché existente: la app sigue usando la
  * última regla recibida. Solo un 204 (el servidor ya no tiene regla activa)
  * borra la caché del tipo, para no seguir ofreciendo una regla retirada.
+ *
+ * Sin redirecciones: el pinning de OkHttp se aplica por hostname, así que un 3xx
+ * HTTPS→HTTPS hacia otro host podría servir una regla (o un 204) desde un
+ * destino sin pines. Un 3xx aquí es un fallo más y se conserva la caché.
  */
 @Singleton
 class ZoneRuleSync @Inject constructor(
@@ -63,10 +69,13 @@ class ZoneRuleSync @Inject constructor(
     private val rules: ZoneRuleRepository,
     @Dispatcher(AgroDispatcher.IO) private val io: CoroutineDispatcher,
 ) {
-    private val api = retrofit.create(ZoneRuleApi::class.java)
+    private val api = retrofit.newBuilder()
+        .client((retrofit.callFactory() as OkHttpClient).newBuilder().followRedirects(false).build())
+        .build()
+        .create(ZoneRuleApi::class.java)
     private val json = Json { ignoreUnknownKeys = true }
 
-    /** `true` si todos los tipos quedaron al día (200, 204 o 304). */
+    /** `true` si todos los tipos quedaron al día (200, 204, o 304 con regla válida en caché). */
     suspend fun syncAll(types: List<String> = ZoneRuleTypes.ALL): Boolean {
         var allOk = true
         for (type in types) {
@@ -78,11 +87,14 @@ class ZoneRuleSync @Inject constructor(
 
     suspend fun sync(type: String): Boolean = withContext(io) {
         try {
+            // `cached` ya descarta reglas inválidas: su ETag no se reutiliza.
             val etag = rules.cached(type)?.etag
             val response = api.activeRule(type, etag)
             response.errorBody()?.close()
             when (response.code()) {
-                304 -> true
+                // Solo es «al día» si pedimos con un ETag de una regla válida; un 304
+                // sin él (servidor o proxy erróneo) deja al tipo sin regla: fallo.
+                304 -> { response.body()?.close(); etag != null }
                 204 -> { response.body()?.close(); rules.clear(type); true }
                 200 -> {
                     val raw = response.body()?.use { readLimited(it) } ?: return@withContext false
@@ -99,7 +111,7 @@ class ZoneRuleSync @Inject constructor(
         } catch (_: IllegalArgumentException) { false }
     }
 
-    /** Lee como mucho [MAX_BODY_BYTES]: una regla tiene a lo sumo 50 filas, unos pocos KB. */
+    /** Lee como mucho [MAX_BODY_BYTES]: una regla tiene a lo sumo 12 filas, unos pocos KB. */
     private fun readLimited(body: ResponseBody): String? {
         if (body.contentLength() > MAX_BODY_BYTES) return null
         val source = body.source()
@@ -114,22 +126,14 @@ class ZoneRuleSync @Inject constructor(
 
     internal companion object {
         const val MAX_BODY_BYTES = 64L * 1024
-        private const val MAX_ROWS = 50
-        private const val MAX_RADIUS_M = 10_000.0
     }
 
-    /** Validación defensiva: una tabla incoherente no se guarda, se conserva la anterior. */
-    private fun ZoneRuleDto.toDomainOrNull(requested: String): ZoneRule? {
-        if (tipoEnfermedad != requested || version < 1 || filas.isEmpty() || filas.size > MAX_ROWS) return null
-        val valid = filas.all { row ->
-            listOf(row.sevMax, row.incMax, row.radioMinM, row.radioMaxM).all { it.isFinite() } &&
-                row.sevMax in 0.0..100.0 && row.incMax in 0.0..100.0 &&
-                row.radioMinM >= 0.0 && row.radioMinM <= row.radioMaxM && row.radioMaxM <= MAX_RADIUS_M
-        }
-        if (!valid || filas.map { it.orden }.toSet().size != filas.size) return null
-        return ZoneRule(
-            tipoEnfermedad, version, calibrada,
-            filas.sortedBy { it.orden }.map { ZoneRuleRow(it.orden, it.sevMax, it.incMax, it.radioMinM, it.radioMaxM) },
-        )
-    }
+    /**
+     * Validación defensiva con la misma regla de dominio que la caché
+     * ([isValidFor]): una tabla incoherente no se guarda, se conserva la anterior.
+     */
+    private fun ZoneRuleDto.toDomainOrNull(requested: String): ZoneRule? = ZoneRule(
+        tipoEnfermedad, version, calibrada,
+        filas.sortedBy { it.orden }.map { ZoneRuleRow(it.orden, it.sevMax, it.incMax, it.radioMinM, it.radioMaxM) },
+    ).takeIf { it.isValidFor(requested) }
 }

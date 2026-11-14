@@ -342,6 +342,30 @@ class ScanViewModelTest {
     }
 
     @Test
+    fun `la estimacion guarda los datos con que se calculo y se marca desactualizada si cambian`() = runTest(dispatcher) {
+        givenIdentified(classId = "Leaf rust")
+        zoneRules.rules["roya"] = ROYA_RULE
+
+        val subject = readyViewModel()
+        subject.onIntent(ScanIntent.Capture(image()))
+        val before = (subject.state.value as ScanUiState.Identified).zone!!
+        assertFalse(before.isStale(null))
+
+        // La incidencia fuera de rango se acota y se guarda ya acotada.
+        subject.onIntent(ScanIntent.EstimateZone(SeverityBand.MEDIA, incidencePct = 130, plantsPerHa = 4000))
+
+        val zone = (subject.state.value as ScanUiState.Identified).zone!!
+        val inputs = ZoneInputs(SeverityBand.MEDIA, 100, 4000)
+        assertEquals(inputs, zone.inputs)
+        assertFalse(zone.isStale(inputs))
+        assertTrue(zone.isStale(inputs.copy(severity = SeverityBand.ALTA)))
+        assertTrue(zone.isStale(inputs.copy(incidencePct = 95)))
+        assertTrue(zone.isStale(inputs.copy(plantsPerHa = 4001)))
+        // Densidad inválida en el formulario: el resultado ya no corresponde a lo visible.
+        assertTrue(zone.isStale(null))
+    }
+
+    @Test
     fun `sin regla en cache no se ofrece zona`() = runTest(dispatcher) {
         givenIdentified(classId = "Leaf rust")
 

@@ -14,6 +14,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 
 class ZoneRuleStoreTest {
 
@@ -27,7 +28,10 @@ class ZoneRuleStoreTest {
         }
     }
 
-    private val rule = ZoneRule("roya", 2, false, listOf(ZoneRuleRow(1, 10.0, 20.0, 0.0, 3.0)))
+    private val rule = ZoneRule(
+        "roya", 2, false,
+        listOf(ZoneRuleRow(1, 10.0, 20.0, 0.0, 3.0), ZoneRuleRow(2, 100.0, 100.0, 3.0, 8.0)),
+    )
 
     @Test
     fun `guarda regla y etag por tipo y los borra con 204`() = runTest {
@@ -48,6 +52,39 @@ class ZoneRuleStoreTest {
         preferences.edit { it[stringPreferencesKey("zone_rule_json_roya")] = "{no es json" }
 
         assertNull(ZoneRuleStore(preferences).cached("roya"))
+    }
+
+    @Test
+    fun `json legible pero invalido se trata como sin regla y no reutiliza su etag`() = runTest {
+        val preferences = MemoryPreferences()
+        val store = ZoneRuleStore(preferences)
+        store.save("roya", rule, "\"abc\"")
+        val valid = preferences.data.first()[stringPreferencesKey("zone_rule_json_roya")]!!
+
+        // Guardado bajo `roya` pero declara `phoma`.
+        preferences.edit { it[stringPreferencesKey("zone_rule_json_roya")] = valid.replace("\"roya\"", "\"phoma\"") }
+        assertNull(store.cached("roya"))
+        // Radio negativo.
+        preferences.edit { it[stringPreferencesKey("zone_rule_json_roya")] = valid.replace("\"radioMinM\":0.0", "\"radioMinM\":-5.0") }
+        assertNull(store.cached("roya"))
+        // Mínimo mayor que máximo.
+        preferences.edit { it[stringPreferencesKey("zone_rule_json_roya")] = valid.replace("\"radioMinM\":3.0", "\"radioMinM\":9.0") }
+        assertNull(store.cached("roya"))
+
+        preferences.edit { it[stringPreferencesKey("zone_rule_json_roya")] = valid }
+        assertEquals("\"abc\"", store.cached("roya")!!.etag)
+    }
+
+    @Test
+    fun `no escribe reglas invalidas ni de otro tipo`() = runTest {
+        val store = ZoneRuleStore(MemoryPreferences())
+
+        assertThrows<IllegalArgumentException> { store.save("phoma", rule, "\"abc\"") }
+        assertThrows<IllegalArgumentException> {
+            store.save("roya", rule.copy(filas = listOf(ZoneRuleRow(1, 100.0, 100.0, -1.0, 3.0))), null)
+        }
+        assertNull(store.cached("roya"))
+        assertNull(store.cached("phoma"))
     }
 
     @Test

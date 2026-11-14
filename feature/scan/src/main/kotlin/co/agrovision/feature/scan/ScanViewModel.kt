@@ -174,13 +174,20 @@ class ScanViewModel @Inject constructor(
         val current = _state.value as? ScanUiState.Identified ?: return
         val zone = current.zone ?: return
         val plantsPerHa = intent.plantsPerHa.coerceIn(ZoneDefaults.MIN_PLANTS_PER_HA, ZoneDefaults.MAX_PLANTS_PER_HA)
+        val incidencePct = intent.incidencePct.coerceIn(0, 100)
         val result = estimateZone(
             rule = zone.rule,
             severityPct = intent.severity.representativePct,
-            incidencePct = intent.incidencePct.coerceIn(0, 100).toDouble(),
+            incidencePct = incidencePct.toDouble(),
             plantsPerHa = plantsPerHa,
         ) ?: return
-        _state.value = current.copy(zone = zone.copy(plantsPerHa = plantsPerHa, estimate = result))
+        _state.value = current.copy(
+            zone = zone.copy(
+                plantsPerHa = plantsPerHa,
+                estimate = result,
+                inputs = ZoneInputs(intent.severity, incidencePct, plantsPerHa),
+            ),
+        )
         if (plantsPerHa != zone.plantsPerHa) {
             viewModelScope.launch {
                 runCatching { zoneRules.setPlantsPerHa(plantsPerHa) }
