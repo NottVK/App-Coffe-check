@@ -16,6 +16,11 @@ import co.agrovision.core.model.usecase.ClassifyImageUseCase
 import co.agrovision.core.model.usecase.ConfirmPredictionUseCase
 import co.agrovision.core.model.usecase.CorrectPredictionUseCase
 import co.agrovision.core.model.usecase.SaveCaptureUseCase
+import co.agrovision.core.model.port.ZoneRuleRepository
+import co.agrovision.core.model.zone.ZoneDefaults
+import co.agrovision.core.model.zone.ZoneRuleTypes
+import co.agrovision.core.model.zone.estimateZone
+import kotlinx.coroutines.flow.first
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,6 +45,7 @@ class ScanViewModel @Inject constructor(
     private val correctPrediction: CorrectPredictionUseCase,
     private val classifier: PestClassifier,
     private val telemetry: TelemetryRecorder,
+    private val zoneRules: ZoneRuleRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<ScanUiState>(ScanUiState.Idle)
@@ -59,6 +65,7 @@ class ScanViewModel @Inject constructor(
             )
             ScanIntent.Retry -> backToPreview()
             ScanIntent.DismissResult -> backToPreview()
+            is ScanIntent.EstimateZone -> estimate(intent)
         }
     }
 
@@ -139,7 +146,45 @@ class ScanViewModel @Inject constructor(
 
             when (saved) {
                 is AgroResult.Failure -> _state.value = saved.error.toErrorState()
-                is AgroResult.Success -> _state.value = classification.toUiState(saved.value)
+                is AgroResult.Success -> _state.value = classification.toUiState(saved.value).withZone()
+            }
+        }
+    }
+
+    /**
+     * Ofrece la zona solo si la clase tiene tipo de regla Y hay regla en caché.
+     * Sin regla descargada no hay botón: no se inventa una tabla.
+     */
+    private suspend fun ScanUiState.withZone(): ScanUiState {
+        if (this !is ScanUiState.Identified) return this
+        val classId = top.firstOrNull { it.pestId == pest.id }?.classId
+        val type = ZoneRuleTypes.forClass(classId, pest.id) ?: return this
+        val rule = runCatching { zoneRules.cached(type)?.rule }
+            .onFailure { Log.w(TAG, "no se pudo leer la regla de zona", it) }
+            .getOrNull()
+            ?.takeIf { it.filas.isNotEmpty() }
+            ?: return this
+        val plantsPerHa = runCatching { zoneRules.observePlantsPerHa().first() }
+            .getOrDefault(ZoneDefaults.PLANTS_PER_HA)
+        return copy(zone = ZoneAvailability(rule, plantsPerHa))
+    }
+
+    /** Solo cálculo local: el resultado no se guarda en Room ni se envía al API. */
+    private fun estimate(intent: ScanIntent.EstimateZone) {
+        val current = _state.value as? ScanUiState.Identified ?: return
+        val zone = current.zone ?: return
+        val plantsPerHa = intent.plantsPerHa.coerceIn(ZoneDefaults.MIN_PLANTS_PER_HA, ZoneDefaults.MAX_PLANTS_PER_HA)
+        val result = estimateZone(
+            rule = zone.rule,
+            severityPct = intent.severity.representativePct,
+            incidencePct = intent.incidencePct.coerceIn(0, 100).toDouble(),
+            plantsPerHa = plantsPerHa,
+        ) ?: return
+        _state.value = current.copy(zone = zone.copy(plantsPerHa = plantsPerHa, estimate = result))
+        if (plantsPerHa != zone.plantsPerHa) {
+            viewModelScope.launch {
+                runCatching { zoneRules.setPlantsPerHa(plantsPerHa) }
+                    .onFailure { Log.w(TAG, "no se pudo guardar la densidad de siembra", it) }
             }
         }
     }

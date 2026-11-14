@@ -45,4 +45,17 @@
     <string name="guia_mas_luz">Busca mejor luz</string>
     <string name="guia_estabiliza">Sostén firme el teléfono</string>
     <string name="guia_listo">Encuadra la parte afectada y dispara</string>
+
+    <!-- Zona a vigilar. Estimación local con la regla del agrónomo; no es diagnóstico. -->
+    <string name="zona_estimar">Estimar zona a vigilar</string>
+    <string name="zona_titulo">Zona a vigilar</string>
+    <string name="zona_pregunta_severidad">¿Cuánto daño tiene la hoja más afectada?</string>
+    <string name="zona_pregunta_incidencia">De cada 100 plantas cercanas, ¿cuántas tienen síntomas?</string>
+    <string name="zona_calcular">Calcular zona</string>
+    <string name="zona_elige_severidad">Elige primero cuánto daño ves.</string>
+    <string name="zona_resultado_radio">Zona a revisar: %1$s a %2$s m alrededor del foco</string>
+    <string name="zona_resultado_plantas">Entre %1$d y %2$d plantas aprox.</string>
+    <string name="zona_sin_calibrar">Estimación sin calibrar (regla v%1$d)</string>
+    <string name="zona_calibrada">Regla v%1$d, calibrada por un agrónomo</string>
+    <string name="zona_cerrar">Cerrar</string>
 </resources>

@@ -15,6 +15,7 @@ import co.agrovision.core.model.usecase.RollBackModelUseCase
 import co.agrovision.core.model.usecase.SyncPendingUseCase
 import co.agrovision.core.model.usecase.SyncTrigger
 import co.agrovision.network.api.CatalogSync
+import co.agrovision.network.api.ZoneRuleSync
 import co.agrovision.core.data.catalog.CatalogSeeder
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -36,6 +37,7 @@ class SyncWorker @AssistedInject constructor(
     private val purgeExpired: PurgeExpiredCapturesUseCase,
     private val catalogSync: CatalogSync,
     private val catalogSeeder: CatalogSeeder,
+    private val zoneRuleSync: ZoneRuleSync,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
@@ -44,6 +46,10 @@ class SyncWorker @AssistedInject constructor(
         // retrasar las solicitudes de revisión que alguien está esperando.
         val outcome = syncPending(SyncTrigger.WORKER)
         val catalogOk = catalogSync.sync()
+        // Reglas de zona: después de la cola y del catálogo, y sin decidir el
+        // reintento. Un fallo conserva la última regla en caché; la próxima
+        // sincronización la vuelve a pedir con su ETag (304 si no cambió).
+        if (!zoneRuleSync.syncAll()) Log.i(TAG, "Reglas de zona sin actualizar; se usa la caché")
 
         // La purga corre tras una sincronización con éxito, no antes: borrar
         // capturas cuya subida todavía no se ha confirmado sería perder trabajo

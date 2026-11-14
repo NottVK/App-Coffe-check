@@ -200,6 +200,8 @@ private fun IdentifiedContent(state: ScanUiState.Identified, onIntent: (ScanInte
             icon = Icons.Filled.Check,
             onClick = { onIntent(ScanIntent.ConfirmPrediction(state.captureId)) },
         )
+        // Sin regla en caché `zone` es null: no hay botón ni tabla inventada.
+        state.zone?.let { zone -> ZoneSection(zone, onIntent) }
         SecondaryFieldButton(
             text = stringResource(R.string.scan_no_es_esto),
             icon = Icons.AutoMirrored.Filled.HelpOutline,

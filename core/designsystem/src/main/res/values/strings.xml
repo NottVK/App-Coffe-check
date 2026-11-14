@@ -80,4 +80,17 @@
     <string name="severidad_descripcion">Severidad %1$s, nivel %2$d de 4</string>
     <string name="confianza_descripcion">Confianza del %1$d por ciento</string>
 
+    <!-- ── Zona a vigilar: controles manuales ─────────────────────────────── -->
+    <string name="zona_severidad_poca" formatted="false">Poca &lt;10 %</string>
+    <string name="zona_severidad_media" formatted="false">Media 10-30 %</string>
+    <string name="zona_severidad_alta" formatted="false">Alta 30-60 %</string>
+    <string name="zona_severidad_muy_alta" formatted="false">Muy alta &gt;60 %</string>
+    <string name="zona_incidencia_valor">%1$d de cada 100</string>
+    <string name="zona_incidencia_descripcion">%1$d plantas de cada 100</string>
+    <string name="zona_incidencia_menos">Restar plantas</string>
+    <string name="zona_incidencia_mas">Sumar plantas</string>
+    <string name="zona_plantas_ha">Plantas por hectárea</string>
+    <string name="zona_plantas_ha_ayuda">Cuántas matas tienes sembradas en una hectárea.</string>
+    <string name="zona_plantas_ha_invalido">Escribe un número entre 1 y 1000000.</string>
+
 </resources>

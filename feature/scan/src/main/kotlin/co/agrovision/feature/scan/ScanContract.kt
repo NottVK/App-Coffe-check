@@ -6,6 +6,9 @@ import co.agrovision.core.model.pest.PestTaxon
 import co.agrovision.core.model.scan.Prediction
 import co.agrovision.core.model.scan.QualityHint
 import co.agrovision.core.model.scan.UncertaintyReason
+import co.agrovision.core.model.zone.SeverityBand
+import co.agrovision.core.model.zone.ZoneEstimate
+import co.agrovision.core.model.zone.ZoneRule
 
 /**
  * Contrato MVI de la pantalla de escaneo (§12.4).
@@ -56,6 +59,12 @@ sealed interface ScanUiState {
          */
         val uncertaintyGatesActive: Boolean,
         val latencyMillis: Long,
+        /**
+         * Estimación de «zona a vigilar». `null` si la clase no tiene tipo de
+         * regla (deficiencias, hoja sana) o si nunca llegó una regla del
+         * servidor: en ese caso no se ofrece nada, ni se inventa una tabla.
+         */
+        val zone: ZoneAvailability? = null,
     ) : ScanUiState
 
     /** La clase de rechazo ganó: lo que hay en la imagen no es una plaga. Es un
@@ -107,6 +116,14 @@ sealed interface ScanUiState {
     data class Error(val message: UiText, val recoverable: Boolean) : ScanUiState
 }
 
+/** Regla de zona disponible en caché para la clase detectada, y la última estimación. */
+@Immutable
+data class ZoneAvailability(
+    val rule: ZoneRule,
+    val plantsPerHa: Int,
+    val estimate: ZoneEstimate? = null,
+)
+
 /**
  * Guía de encuadre. Es lo que impone la disciplina de acercarse y encuadrar antes
  * de disparar, que es la mitad de la calidad del dataset.
@@ -127,6 +144,9 @@ sealed interface ScanIntent {
     data class CreateReviewRequest(val captureId: String) : ScanIntent
     data object Retry : ScanIntent
     data object DismissResult : ScanIntent
+
+    /** Controles manuales: severidad por rango, plantas de cada 100 y densidad de siembra. */
+    data class EstimateZone(val severity: SeverityBand, val incidencePct: Int, val plantsPerHa: Int) : ScanIntent
 }
 
 /** Efectos de una sola vez. `Channel`, no `StateFlow`: un `StateFlow` reemitiría

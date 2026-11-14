@@ -25,6 +25,10 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertInstanceOf
+import org.junit.jupiter.api.Assertions.assertNull
+import co.agrovision.core.model.zone.SeverityBand
+import co.agrovision.core.model.zone.ZoneRule
+import co.agrovision.core.model.zone.ZoneRuleRow
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -65,6 +69,7 @@ class ScanViewModelTest {
     private val images = FakeImageStore()
     private val settings = FakeSettings()
     private val telemetry = FakeTelemetry()
+    private val zoneRules = FakeZoneRules()
 
     private fun viewModel() = ScanViewModel(
         classifyImage = ClassifyImageUseCase(quality, classifier, gate, catalog),
@@ -80,6 +85,7 @@ class ScanViewModelTest {
         correctPrediction = CorrectPredictionUseCase(captures, telemetry),
         classifier = classifier,
         telemetry = telemetry,
+        zoneRules = zoneRules,
     )
 
     /**
@@ -298,15 +304,73 @@ class ScanViewModelTest {
         assertTrue(classifier.released)
     }
 
+    // ── Zona a vigilar ───────────────────────────────────────────────────────
+
+    @Test
+    fun `con regla en cache se ofrece la zona y se estima con los controles manuales`() = runTest(dispatcher) {
+        givenIdentified(classId = "Leaf rust")
+        zoneRules.rules["roya"] = ROYA_RULE
+
+        val subject = readyViewModel()
+        subject.onIntent(ScanIntent.Capture(image()))
+        val offered = assertInstanceOf(ScanUiState.Identified::class.java, subject.state.value)
+        assertEquals(ROYA_RULE, offered.zone!!.rule)
+        assertEquals(5000, offered.zone!!.plantsPerHa)
+
+        subject.onIntent(ScanIntent.EstimateZone(SeverityBand.MUY_ALTA, incidencePct = 55, plantsPerHa = 5000))
+
+        val estimate = (subject.state.value as ScanUiState.Identified).zone!!.estimate!!
+        assertEquals(4, estimate.filaAplicada.orden)
+        assertEquals(353, estimate.plantasMin)
+        assertEquals(1414, estimate.plantasMax)
+        assertFalse(estimate.calibrada)
+        // El resultado no se persiste: la captura guardada es la misma de antes.
+        assertEquals(1, captures.saved.size)
+    }
+
+    @Test
+    fun `la densidad de siembra editada se guarda`() = runTest(dispatcher) {
+        givenIdentified(classId = "Leaf rust")
+        zoneRules.rules["roya"] = ROYA_RULE
+
+        val subject = readyViewModel()
+        subject.onIntent(ScanIntent.Capture(image()))
+        subject.onIntent(ScanIntent.EstimateZone(SeverityBand.POCA, incidencePct = 5, plantsPerHa = 3300))
+
+        assertEquals(3300, zoneRules.plants.value)
+        assertEquals(1, (subject.state.value as ScanUiState.Identified).zone!!.estimate!!.filaAplicada.orden)
+    }
+
+    @Test
+    fun `sin regla en cache no se ofrece zona`() = runTest(dispatcher) {
+        givenIdentified(classId = "Leaf rust")
+
+        val subject = readyViewModel()
+        subject.onIntent(ScanIntent.Capture(image()))
+
+        assertNull(assertInstanceOf(ScanUiState.Identified::class.java, subject.state.value).zone)
+    }
+
+    @Test
+    fun `una clase sin tipo de regla no ofrece zona aunque haya reglas`() = runTest(dispatcher) {
+        givenIdentified(classId = "Deficiencia_Potasio")
+        zoneRules.rules["roya"] = ROYA_RULE
+
+        val subject = readyViewModel()
+        subject.onIntent(ScanIntent.Capture(image()))
+
+        assertNull(assertInstanceOf(ScanUiState.Identified::class.java, subject.state.value).zone)
+    }
+
     // ── Utilidades ───────────────────────────────────────────────────────────
 
     /** ViewModel ya precalentado, en estado `Preview`. */
     private fun readyViewModel() = viewModel().also { it.onIntent(ScanIntent.StartCamera) }
 
-    private fun givenIdentified() {
+    private fun givenIdentified(classId: String = "roya") {
         classifier.inference = inference()
         gate.decision = GateDecision.InDomain(
-            top = listOf(Prediction("roya", "Roya", 0.91f, "pest-roya")),
+            top = listOf(Prediction(classId, "Roya", 0.91f, "pest-roya")),
             calibratedConfidence = 0.91f,
             oodScore = 0.4f,
         )
@@ -322,6 +386,16 @@ class ScanViewModelTest {
     )
 
     private companion object {
+        val ROYA_RULE = ZoneRule(
+            tipoEnfermedad = "roya", version = 1, calibrada = false,
+            filas = listOf(
+                ZoneRuleRow(1, 10.0, 20.0, 0.0, 3.0),
+                ZoneRuleRow(2, 30.0, 40.0, 3.0, 8.0),
+                ZoneRuleRow(3, 60.0, 70.0, 8.0, 15.0),
+                ZoneRuleRow(4, 100.0, 100.0, 15.0, 30.0),
+            ),
+        )
+
         val ROYA = PestTaxon(
             id = "pest-roya",
             scientificName = "Hemileia vastatrix",

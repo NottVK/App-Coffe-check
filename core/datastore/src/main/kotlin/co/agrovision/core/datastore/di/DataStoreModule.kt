@@ -12,7 +12,9 @@ import co.agrovision.core.common.Dispatcher
 import co.agrovision.core.datastore.ModelSlotPointer
 import co.agrovision.core.datastore.ModelSlotPointerSerializer
 import co.agrovision.core.datastore.PreferencesStore
+import co.agrovision.core.datastore.ZoneRuleStore
 import co.agrovision.core.model.port.SettingsRepository
+import co.agrovision.core.model.port.ZoneRuleRepository
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -74,4 +76,8 @@ abstract class DataStoreBindings {
     @Binds
     @Singleton
     abstract fun bindSettingsRepository(impl: PreferencesStore): SettingsRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindZoneRuleRepository(impl: ZoneRuleStore): ZoneRuleRepository
 }

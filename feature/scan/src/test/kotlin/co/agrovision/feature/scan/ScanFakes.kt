@@ -246,3 +246,14 @@ class SequentialIds(private val prefix: String = "captura-") : IdGenerator {
     private var counter = 0
     override fun newId(): String = "$prefix${++counter}"
 }
+
+class FakeZoneRules(
+    val rules: MutableMap<String, co.agrovision.core.model.zone.ZoneRule> = mutableMapOf(),
+) : co.agrovision.core.model.port.ZoneRuleRepository {
+    val plants = MutableStateFlow(co.agrovision.core.model.zone.ZoneDefaults.PLANTS_PER_HA)
+    override suspend fun cached(type: String) = rules[type]?.let { co.agrovision.core.model.port.CachedZoneRule(it, null) }
+    override suspend fun save(type: String, rule: co.agrovision.core.model.zone.ZoneRule, etag: String?) { rules[type] = rule }
+    override suspend fun clear(type: String) { rules.remove(type) }
+    override fun observePlantsPerHa(): Flow<Int> = plants
+    override suspend fun setPlantsPerHa(value: Int) { plants.value = value }
+}
