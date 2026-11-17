@@ -184,17 +184,6 @@ private fun IdentifiedContent(state: ScanUiState.Identified, onIntent: (ScanInte
 
         ConfidenceBar(confidence = state.confidence)
 
-        // Honestidad sobre las capacidades del reconocedor activo (ADR-014).
-        // Con el modelo heredado no hay compuertas 2 y 3, y callarlo sería
-        // presentar como diagnóstico algo que el sistema no puede respaldar.
-        if (!state.uncertaintyGatesActive) {
-            Text(
-                text = stringResource(R.string.scan_aviso_modelo_heredado),
-                style = MaterialTheme.typography.bodyMedium,
-                color = AgroTheme.semantic.mutedText,
-            )
-        }
-
         // Escenarios automáticos de la regla en caché. `zone` sigue a la regla
         // (ScanViewModel.watchZone): si el servidor la retira, el bloque desaparece.
         // Prototipo de daño en la hoja por color: junto a los escenarios, solo con regla.

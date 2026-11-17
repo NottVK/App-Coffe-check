@@ -283,13 +283,6 @@ internal fun ZoneScenariosBlock(rule: ZoneRule, damage: LeafDamageResult? = null
                     .padding(start = AgroTheme.dimensions.gutter),
             )
         }
-        if (isHighlighted) {
-            Text(
-                stringResource(R.string.zona_escenarios_nota_incidencia),
-                style = MaterialTheme.typography.bodyMedium,
-                color = AgroTheme.semantic.mutedText,
-            )
-        }
         // Aviso fijo: sin calibrar, los radios son criterio experto, no una medición.
         StatusPill(
             text = if (rule.calibrada) stringResource(R.string.zona_calibrada, rule.version)
