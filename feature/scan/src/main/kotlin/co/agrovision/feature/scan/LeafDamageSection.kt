@@ -3,6 +3,21 @@ package co.agrovision.feature.scan
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.window.Dialog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -75,6 +90,8 @@ private fun DebugMaskButton(mask: RgbImage) {
     TextButton(onClick = { open = true }) { Text(stringResource(R.string.dano_ver_mascara)) }
     if (!open) return
     val bitmap = remember(mask) { mask.toImageBitmap() }
+    var zoomed by remember { mutableStateOf(false) }
+    if (zoomed) ZoomedMask(bitmap, onClose = { zoomed = false })
     AlertDialog(
         onDismissRequest = { open = false },
         // Casi todo el ancho: la máscara es pequeña y en el diálogo estándar se veía diminuta.
@@ -89,7 +106,15 @@ private fun DebugMaskButton(mask: RgbImage) {
                     contentDescription = stringResource(R.string.dano_mascara_descripcion),
                     contentScale = ContentScale.Fit,
                     filterQuality = FilterQuality.Medium,
-                    modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(MaterialTheme.shapes.medium)
+                        .clickable { zoomed = true },
+                )
+                Text(
+                    stringResource(R.string.dano_mascara_tocar),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AgroTheme.semantic.mutedText,
                 )
                 MaskLegendItem(Color(0xFF2DDC2D), stringResource(R.string.dano_leyenda_hoja))
                 MaskLegendItem(Color(0xFFFF00FF), stringResource(R.string.dano_leyenda_dano))
@@ -97,6 +122,46 @@ private fun DebugMaskButton(mask: RgbImage) {
             }
         },
     )
+}
+
+/** Pantalla completa: pellizcar para acercar, arrastrar para mover, tocar la X para cerrar. */
+@Composable
+private fun ZoomedMask(bitmap: ImageBitmap, onClose: () -> Unit) {
+    var scale by remember { mutableFloatStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(Modifier.fillMaxSize().background(Color.Black)) {
+            Image(
+                bitmap = bitmap,
+                contentDescription = stringResource(R.string.dano_mascara_descripcion),
+                contentScale = ContentScale.Fit,
+                filterQuality = FilterQuality.Medium,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        detectTransformGestures { _, pan, zoom, _ ->
+                            scale = (scale * zoom).coerceIn(1f, 8f)
+                            offset = if (scale == 1f) Offset.Zero else offset + pan
+                        }
+                    }
+                    .pointerInput(Unit) {
+                        detectTapGestures(onDoubleTap = {
+                            scale = if (scale > 1f) 1f else 3f
+                            offset = Offset.Zero
+                        })
+                    }
+                    .graphicsLayer(
+                        scaleX = scale,
+                        scaleY = scale,
+                        translationX = offset.x,
+                        translationY = offset.y,
+                    ),
+            )
+            IconButton(onClick = onClose, modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(8.dp)) {
+                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.zona_cerrar), tint = Color.White)
+            }
+        }
+    }
 }
 
 @Composable

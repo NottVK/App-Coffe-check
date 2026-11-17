@@ -76,6 +76,7 @@
     <string name="dano_calculando">Estimando el daño en la hoja…</string>
     <string name="dano_ver_mascara">Ver máscara</string>
     <string name="dano_mascara_titulo">Máscara del daño (solo debug)</string>
+    <string name="dano_mascara_tocar">Toca la imagen para verla en grande</string>
     <string name="dano_leyenda_hoja">Verde: hoja sana</string>
     <string name="dano_leyenda_dano">Magenta: daño detectado (con contorno)</string>
     <string name="dano_leyenda_fondo">Oscuro: fuera de la hoja</string>
