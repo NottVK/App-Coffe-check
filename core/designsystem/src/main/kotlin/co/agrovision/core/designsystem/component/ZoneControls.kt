@@ -101,13 +101,6 @@ fun SeverityBandSelector(
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         referenceImage(band)
-                        Text(
-                            text = label,
-                            style = MaterialTheme.typography.titleSmall,
-                            textAlign = TextAlign.Center,
-                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
-                            else MaterialTheme.colorScheme.onSurface,
-                        )
                     }
                 }
             }
