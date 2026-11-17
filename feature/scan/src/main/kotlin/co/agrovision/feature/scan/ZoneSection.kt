@@ -1,6 +1,32 @@
 package co.agrovision.feature.scan
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
+import co.agrovision.core.designsystem.component.ReferenceImagePlaceholder
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -149,6 +175,7 @@ private fun ZoneControlsSheet(
         )
         Text(stringResource(R.string.zona_pregunta_severidad), style = MaterialTheme.typography.titleMedium)
         SeverityBandSelector(
+            referenceImage = { LotPhotoSlot(it) },
             selected = form.severity,
             onSelect = {
                 form.severity = it
@@ -289,5 +316,73 @@ internal fun ZoneScenariosBlock(rule: ZoneRule, damage: LeafDamageResult? = null
             else stringResource(R.string.zona_sin_calibrar, rule.version),
             tone = if (rule.calibrada) StatusTone.POSITIVE else StatusTone.WARNING,
         )
+    }
+}
+
+/**
+ * Recuadro de un rango de daño con su foto del lote: el productor la toma ahí
+ * mismo, en el momento. Queda en `filesDir/lot_photos/<rango>.jpg` y reemplaza a
+ * la anterior; si cancela la cámara, la foto previa se conserva. El toque en el
+ * recuadro sigue eligiendo el rango; solo el botón de cámara abre la cámara.
+ */
+@Composable
+private fun LotPhotoSlot(band: SeverityBand) {
+    val context = LocalContext.current
+    var version by rememberSaveable(band) { mutableIntStateOf(0) }
+    val photo = remember(band) { File(File(context.filesDir, "lot_photos").apply { mkdirs() }, "${band.name}.jpg") }
+    val pending = remember(band) { File(File(context.cacheDir, "share").apply { mkdirs() }, "lot_${band.name}.jpg") }
+
+    val bitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, band, version) {
+        value = withContext(Dispatchers.IO) {
+            if (!photo.exists()) return@withContext null
+            runCatching {
+                BitmapFactory.decodeFile(photo.path, BitmapFactory.Options().apply { inSampleSize = 4 })?.asImageBitmap()
+            }.getOrNull()
+        }
+    }
+
+    val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        if (ok && pending.length() > 0) {
+            pending.copyTo(photo, overwrite = true)
+            version++
+        }
+        pending.delete()
+    }
+    fun launchCamera() {
+        pending.delete()
+        takePicture.launch(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", pending))
+    }
+    val askPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) launchCamera()
+    }
+
+    val label = severityBandLabel(band)
+    Box(modifier = Modifier.fillMaxWidth()) {
+        val image = bitmap
+        if (image == null) {
+            ReferenceImagePlaceholder()
+        } else {
+            Image(
+                bitmap = image,
+                contentDescription = stringResource(R.string.zona_foto_descripcion, label),
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .clip(MaterialTheme.shapes.medium),
+            )
+        }
+        FilledTonalIconButton(
+            onClick = {
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                    launchCamera()
+                } else {
+                    askPermission.launch(Manifest.permission.CAMERA)
+                }
+            },
+            modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp).size(48.dp),
+        ) {
+            Icon(Icons.Filled.PhotoCamera, contentDescription = stringResource(R.string.zona_foto_tomar, label))
+        }
     }
 }

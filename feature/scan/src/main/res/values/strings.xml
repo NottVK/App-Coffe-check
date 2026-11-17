@@ -64,6 +64,8 @@
 
     <!-- Escenarios de la regla, automáticos bajo el diagnóstico. Los números salen de la tabla en caché. -->
     <string name="zona_escenarios_titulo">Si la afección se extiende, zona a vigilar alrededor del foco:</string>
+    <string name="zona_foto_tomar">Tomar foto del lote: %1$s</string>
+    <string name="zona_foto_descripcion">Foto del lote: %1$s</string>
     <string name="zona_escenario_hasta">Hasta %1$s %% de plantas afectadas y %2$s %% de daño en hoja: %3$s a %4$s m</string>
     <string name="zona_escenario_mas">Más de lo anterior: %1$s a %2$s m</string>
     <string name="zona_escenario_cualquiera">En cualquier caso: %1$s a %2$s m</string>

@@ -12,5 +12,6 @@
 <paths>
     <files-path name="capturas" path="captures/" />
     <files-path name="miniaturas" path="thumbnails/" />
+    <files-path name="lote" path="lot_photos/" />
     <cache-path name="compartir" path="share/" />
 </paths>
