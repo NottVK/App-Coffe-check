@@ -309,21 +309,30 @@ class LeafDamageAnalysis(
      */
     fun overlay(): RgbImage {
         val px = image.pixels
+        val w = image.width
+        val h = image.height
+        // Contorno del daño: píxel de daño con algún vecino (4-conexo) que no lo es.
+        fun isDamage(x: Int, y: Int) = x in 0 until w && y in 0 until h && damageMask[y * w + x]
         val out = IntArray(px.size) { i ->
             val p = px[i]
             val r = (p shr 16) and 0xFF
             val g = (p shr 8) and 0xFF
             val b = p and 0xFF
+            val x = i % w
+            val y = i / w
             when {
-                damageMask[i] -> rgb(blend(r, 255), blend(g, 0), blend(b, 255))
-                leafMask[i] -> rgb(blend(r, 0), blend(g, 200), blend(b, 0))
-                else -> rgb(r / 4, g / 4, b / 4)
+                damageMask[i] && !(isDamage(x - 1, y) && isDamage(x + 1, y) && isDamage(x, y - 1) && isDamage(x, y + 1)) ->
+                    rgb(255, 0, 255)
+                // Relleno más suave que antes: la textura de la hoja se sigue viendo.
+                damageMask[i] -> rgb(blend(r, 255, 0.55), blend(g, 0, 0.55), blend(b, 255, 0.55))
+                leafMask[i] -> rgb(blend(r, 0, 0.30), blend(g, 220, 0.30), blend(b, 0, 0.30))
+                else -> rgb(r / 5, g / 5, b / 5)
             }
         }
-        return RgbImage(image.width, image.height, out)
+        return RgbImage(w, h, out)
     }
 
-    private fun blend(c: Int, tint: Int) = (c * 0.4 + tint * 0.6).toInt()
+    private fun blend(c: Int, tint: Int, alpha: Double) = (c * (1 - alpha) + tint * alpha).toInt()
     private fun rgb(r: Int, g: Int, b: Int) = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
 }
 

@@ -2,7 +2,18 @@ package co.agrovision.feature.scan
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.AlertDialog
@@ -66,17 +77,34 @@ private fun DebugMaskButton(mask: RgbImage) {
     val bitmap = remember(mask) { mask.toImageBitmap() }
     AlertDialog(
         onDismissRequest = { open = false },
+        // Casi todo el ancho: la máscara es pequeña y en el diálogo estándar se veía diminuta.
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier.fillMaxWidth(0.94f),
         confirmButton = { TextButton(onClick = { open = false }) { Text(stringResource(R.string.zona_cerrar)) } },
         title = { Text(stringResource(R.string.dano_mascara_titulo)) },
         text = {
-            Image(
-                bitmap = bitmap,
-                contentDescription = stringResource(R.string.dano_mascara_descripcion),
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(AgroTheme.dimensions.gutter)) {
+                Image(
+                    bitmap = bitmap,
+                    contentDescription = stringResource(R.string.dano_mascara_descripcion),
+                    contentScale = ContentScale.Fit,
+                    filterQuality = FilterQuality.Medium,
+                    modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium),
+                )
+                MaskLegendItem(Color(0xFF2DDC2D), stringResource(R.string.dano_leyenda_hoja))
+                MaskLegendItem(Color(0xFFFF00FF), stringResource(R.string.dano_leyenda_dano))
+                MaskLegendItem(Color(0xFF2B2B2B), stringResource(R.string.dano_leyenda_fondo))
+            }
         },
     )
+}
+
+@Composable
+private fun MaskLegendItem(color: Color, text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(Modifier.size(18.dp).clip(CircleShape).background(color))
+        Text(text, style = MaterialTheme.typography.bodyMedium)
+    }
 }
 
 /** Borde con Android: ARGB empaquetado a `Bitmap` solo para mostrarlo. */

@@ -75,7 +75,10 @@
     <string name="dano_no_estimable">No se pudo estimar el daño. Acerca la hoja y mejora la luz.</string>
     <string name="dano_calculando">Estimando el daño en la hoja…</string>
     <string name="dano_ver_mascara">Ver máscara</string>
-    <string name="dano_mascara_titulo">Máscara (solo debug): verde = hoja, magenta = daño</string>
+    <string name="dano_mascara_titulo">Máscara del daño (solo debug)</string>
+    <string name="dano_leyenda_hoja">Verde: hoja sana</string>
+    <string name="dano_leyenda_dano">Magenta: daño detectado (con contorno)</string>
+    <string name="dano_leyenda_fondo">Oscuro: fuera de la hoja</string>
     <string name="dano_mascara_descripcion">Foto reducida con la hoja teñida de verde y el daño de magenta; el fondo, oscurecido.</string>
     <string name="dano_preseleccion_auto">Preselección automática según el daño estimado en la foto (~%1$d %%). Puedes cambiarla.</string>
     <string name="zona_escenario_resaltado">Coincide con el daño estimado</string>
