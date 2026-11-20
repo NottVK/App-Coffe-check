@@ -113,7 +113,17 @@ class ModelRegistryRepositoryImpl @Inject constructor(
         // Sin descarga y sin red: el modelo previo sigue en disco. Esa es la
         // razón de ser del esquema de dos ranuras y lo que hace alcanzable el
         // objetivo de menos de 30 minutos hasta la reversión efectiva.
-        if (slots.rollBack()) {
+        // La ranura anterior puede haberse vaciado o sobrescrito después: instalar una
+        // actualización reutiliza la ranura de reserva. Solo se revierte si en disco
+        // sigue exactamente el modelo al que apunta el puntero.
+        val pointer = slots.current()
+        val target = pointer.previousSlot
+        val onDisk = target?.let { installer.readInstalled(it) }
+        if (target == null || onDisk == null || onDisk.version != pointer.previousVersion) {
+            Log.w(TAG, "La ranura anterior ya no contiene ${pointer.previousVersion}; no se revierte.")
+            return@withContext AgroResult.failure(DomainError.ModelUnavailable)
+        }
+        if (slots.rollBack(expectedSlot = target, expectedVersion = onDisk.version)) {
             AgroResult.unit
         } else {
             Log.w(TAG, "No hay ranura anterior a la que revertir.")
@@ -150,6 +160,13 @@ class ModelRegistryRepositoryImpl @Inject constructor(
             source = ModelSource.MappedFile(layout.modelFile(slot)),
             embeddingDim = installed.embeddingDim,
         )
+    }
+
+    /** Lectura barata del puntero; solo cae a disco si el puntero no guarda la versión
+     *  (modelos instalados antes de que la guardara). */
+    override suspend fun activeModelVersion(): String? = withContext(io) {
+        val pointer = slots.current()
+        pointer.activeVersion ?: installer.readInstalled(pointer.activeSlot)?.version
     }
 
     private suspend fun buildState(active: ModelSlot, lastCheck: Long, failures: Int) = ModelRegistryState(

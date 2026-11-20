@@ -60,6 +60,10 @@ class TensorPreprocessor @Inject constructor() {
      *   bytes van crudos 0–255 y el propio grafo aplica la escala de
      *   cuantización. Normalizar aquí *y* dejar que el grafo escale otra vez es
      *   un error clásico que degrada la exactitud sin fallar.
+     * @param signed `true` si el tensor cuantizado es INT8 (−128…127) y no UINT8.
+     *   Es la misma convención que en UINT8 desplazada en 128 —como convierte
+     *   TFLite entre ambos tipos (punto cero −128 en lugar de 0)—: escribir el
+     *   byte crudo haría que todo valor por encima de 127 se leyera negativo.
      * @param mean y @param stdDev estadísticas del preentrenamiento. Solo se
      *   aplican en modelos float.
      */
@@ -68,7 +72,9 @@ class TensorPreprocessor @Inject constructor() {
         quantized: Boolean,
         mean: FloatArray = IMAGENET_MEAN,
         stdDev: FloatArray = IMAGENET_STD,
+        signed: Boolean = false,
     ): ByteBuffer {
+        val offset = if (signed) INT8_OFFSET else 0
         val pixelCount = image.width * image.height
         val bytesPerChannel = if (quantized) 1 else Float.SIZE_BYTES
         val buffer = ByteBuffer
@@ -81,9 +87,9 @@ class TensorPreprocessor @Inject constructor() {
             val b = pixel and 0xFF
 
             if (quantized) {
-                buffer.put(r.toByte())
-                buffer.put(g.toByte())
-                buffer.put(b.toByte())
+                buffer.put((r - offset).toByte())
+                buffer.put((g - offset).toByte())
+                buffer.put((b - offset).toByte())
             } else {
                 buffer.putFloat((r / 255f - mean[0]) / stdDev[0])
                 buffer.putFloat((g / 255f - mean[1]) / stdDev[1])
@@ -126,6 +132,9 @@ class TensorPreprocessor @Inject constructor() {
     private fun Float.toIntFloor(): Int = kotlin.math.floor(this).toInt()
 
     companion object {
+        /** Desplazamiento de UINT8 (0…255) a INT8 (−128…127). */
+        const val INT8_OFFSET = 128
+
         /** Estadísticas de ImageNet, que es donde se preentrena la red base. */
         val IMAGENET_MEAN = floatArrayOf(0.485f, 0.456f, 0.406f)
         val IMAGENET_STD = floatArrayOf(0.229f, 0.224f, 0.225f)

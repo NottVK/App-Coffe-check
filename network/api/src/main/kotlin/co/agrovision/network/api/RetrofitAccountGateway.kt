@@ -14,6 +14,7 @@ import co.agrovision.network.api.dto.OtpVerificationDto
 import co.agrovision.network.api.dto.ProducerProfileRequestDto
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerializationException
 import retrofit2.Response
 import java.io.IOException
 import javax.inject.Inject
@@ -88,6 +89,10 @@ class RetrofitAccountGateway @Inject constructor(
                 AgroResult.success(profile?.takeIf { it.farmName.isNotBlank() })
             } catch (error: IOException) {
                 AgroResult.failure(DomainError.NoConnection)
+            } catch (error: SerializationException) {
+                malformed()
+            } catch (error: IllegalArgumentException) {
+                malformed()
             }
         }
 
@@ -114,6 +119,10 @@ class RetrofitAccountGateway @Inject constructor(
             }
         } catch (error: IOException) {
             AgroResult.failure(DomainError.NoConnection)
+        } catch (error: SerializationException) {
+            malformed()
+        } catch (error: IllegalArgumentException) {
+            malformed()
         }
     }
 
@@ -145,7 +154,17 @@ class RetrofitAccountGateway @Inject constructor(
             else AgroResult.failure(response.toError())
         } catch (error: IOException) {
             AgroResult.failure(DomainError.NoConnection)
+        } catch (error: SerializationException) {
+            malformed()
+        } catch (error: IllegalArgumentException) {
+            malformed()
         }
+
+    /** Un cuerpo que no encaja con el contrato es un fallo del servidor, no un cierre de la
+     *  app. `SerializationException` hereda de `IllegalArgumentException`; la cancelación
+     *  de la corrutina no, así que sigue propagándose. */
+    private fun <T> malformed(): AgroResult<T, DomainError> =
+        AgroResult.failure(DomainError.RemoteFailure(0, "respuesta con formato inesperado"))
 
     private fun <T> AgroResult<Response<T>, DomainError>.unit(): AgroResult<Unit, DomainError> =
         when (this) {

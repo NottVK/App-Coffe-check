@@ -15,6 +15,10 @@ import co.agrovision.core.common.AgroConstants
 import co.agrovision.core.common.AgroDispatcher
 import co.agrovision.core.common.AgroResult
 import co.agrovision.core.common.Dispatcher
+import co.agrovision.core.database.dao.CaptureDao
+import co.agrovision.core.database.dao.ReviewDao
+import co.agrovision.core.database.dao.SyncCursorDao
+import co.agrovision.core.database.entity.SyncCursorEntity
 import co.agrovision.core.datastore.AccountStore
 import co.agrovision.core.datastore.DeviceIdentityStore
 import co.agrovision.core.datastore.SessionTokenStore
@@ -33,6 +37,7 @@ import co.agrovision.core.model.port.Clock
 import co.agrovision.core.model.port.ProfileRegistration
 import co.agrovision.core.model.port.FixResult
 import co.agrovision.core.model.port.LocationProvider
+import co.agrovision.core.model.port.SettingsRepository
 import co.agrovision.core.model.port.SyncGateway
 import co.agrovision.core.model.port.TelemetryRecorder
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -72,6 +77,10 @@ class AccountRepositoryImpl @Inject constructor(
     private val tokens: SessionTokenStore,
     private val gateway: AccountGateway,
     private val clock: Clock,
+    private val settings: SettingsRepository,
+    private val captureDao: CaptureDao,
+    private val reviewDao: ReviewDao,
+    private val cursors: SyncCursorDao,
 ) : AccountRepository {
 
     override fun observe(): Flow<Account> = store.observe()
@@ -94,10 +103,24 @@ class AccountRepositoryImpl @Inject constructor(
             is AgroResult.Failure -> return result
             is AgroResult.Success -> result.value
         }
+        val previous = store.current()
+        val switchingAccount = previous.phone?.let { !samePhone(it, normalizedPhone) } ?: false
+        if (switchingAccount) {
+            // Otra persona entra en este teléfono. Lo de la cuenta anterior no puede salir
+            // con el JWT nuevo: primero se corta la sesión vieja y se retira su cola, y solo
+            // después se guarda el token nuevo.
+            tokens.clear()
+            captureDao.skipUnsent()
+            reviewDao.abandonUnsent(OTHER_ACCOUNT_MESSAGE)
+            cursors.delete(SyncCursorEntity.RESOURCE_RESOLUTIONS)
+            // Los consentimientos y la política son de quien los dio, no del teléfono.
+            settings.update { it.copy(trainingConsent = false, locationShareConsentAtEpochMillis = null) }
+        }
         tokens.save(token)
 
         val now = clock.nowEpochMillis()
-        store.update { account ->
+        store.update { stored ->
+            val account = if (switchingAccount) Account.anonymous(stored.deviceId) else stored
             account.copy(
                 tier = maxOf(account.tier, UserTier.T1_REGISTRADO),
                 phone = normalizedPhone,
@@ -234,6 +257,16 @@ class AccountRepositoryImpl @Inject constructor(
         store.update {
             it.copy(coffeeVariety = variety ?: it.coffeeVariety, plantingAge = age ?: it.plantingAge)
         }
+    }
+
+    private fun samePhone(a: String, b: String): Boolean =
+        a.filter(Char::isDigit).takeLast(PHONE_DIGITS) == b.filter(Char::isDigit).takeLast(PHONE_DIGITS)
+
+    private companion object {
+        /** Un celular colombiano tiene diez dígitos; se ignora el indicativo de país. */
+        const val PHONE_DIGITS = 10
+        const val OTHER_ACCOUNT_MESSAGE =
+            "Se creó con otra cuenta. No se enviará con la cuenta que inició sesión ahora."
     }
 
     /** Un 401 en cualquier llamada autenticada vence la sesión. */

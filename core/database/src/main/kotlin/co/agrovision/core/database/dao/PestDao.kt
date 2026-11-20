@@ -57,4 +57,7 @@ interface SyncCursorDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(cursor: SyncCursorEntity)
+
+    @Query("DELETE FROM sync_cursors WHERE resource = :resource")
+    suspend fun delete(resource: String)
 }

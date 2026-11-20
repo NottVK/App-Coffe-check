@@ -27,12 +27,15 @@ import javax.inject.Singleton
  * Cifrado en reposo con una clave AES-GCM del Android Keystore (API 23+), sin
  * `security-crypto`: la versión alfa que admite minSdk 22 falla en el Keystore de
  * algunos fabricantes, y un fallo ahí deja al productor sin poder iniciar sesión.
- * Por eso cualquier fallo del Keystore **degrada**, nunca bloquea:
- *  - API 22 (sin Keystore simétrico) o Keystore roto al guardar → se guarda como
- *    antes, en claro dentro del almacenamiento privado.
+ * Por eso cualquier fallo del Keystore **degrada**, nunca bloquea, pero tampoco
+ * deja el token en claro en disco:
+ *  - API 22 (sin Keystore simétrico) o Keystore roto al guardar → el token vive
+ *    solo en memoria. Si el proceso muere, el productor vuelve a entrar con OTP,
+ *    lo mismo que tras los 30 minutos que dura el token.
  *  - No se puede descifrar → se borra y el productor vuelve a entrar con OTP, lo
  *    mismo que ya ocurre cuando el token vence (dura 30 minutos).
- * Un token en claro de una versión anterior se sigue leyendo y se recifra.
+ * Un token en claro de una versión anterior se sigue leyendo y se recifra (o, sin
+ * Keystore, pasa a memoria y se borra del disco).
  */
 @Singleton
 class SessionTokenStore @Inject constructor(
@@ -64,13 +67,9 @@ class SessionTokenStore @Inject constructor(
         cached = accessToken
         val encrypted = encryptOrNull(accessToken)
         preferences.edit().apply {
-            if (encrypted != null) {
-                putString(KEY_ENCRYPTED_TOKEN, encrypted)
-                remove(KEY_ACCESS_TOKEN)
-            } else {
-                putString(KEY_ACCESS_TOKEN, accessToken)
-                remove(KEY_ENCRYPTED_TOKEN)
-            }
+            // Nunca en claro: sin cifrado, el token solo queda en `cached`.
+            remove(KEY_ACCESS_TOKEN)
+            if (encrypted != null) putString(KEY_ENCRYPTED_TOKEN, encrypted) else remove(KEY_ENCRYPTED_TOKEN)
         }.apply()
     }
 
@@ -124,7 +123,7 @@ class SessionTokenStore @Inject constructor(
 
     private companion object {
         const val FILE = "agrovision_tokens"
-        /** Formato heredado, en claro. Solo se lee para migrarlo, o se escribe si no hay Keystore. */
+        /** Formato heredado, en claro. Solo se lee para migrarlo; ya no se escribe. */
         const val KEY_ACCESS_TOKEN = "access_token"
         const val KEY_ENCRYPTED_TOKEN = "access_token_v2"
         const val ANDROID_KEYSTORE = "AndroidKeyStore"

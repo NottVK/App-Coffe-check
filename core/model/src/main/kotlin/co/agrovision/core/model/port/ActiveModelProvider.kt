@@ -16,6 +16,13 @@ import java.nio.ByteBuffer
 fun interface ActiveModelProvider {
     /** `null` si no hay ninguna ranura con un modelo válido instalado. */
     suspend fun activeModel(): LoadedModel?
+
+    /**
+     * Versión del modelo activo, sin cargarlo. La inferencia la consulta antes de
+     * cada clasificación para no seguir usando un modelo que se retiró (reversión
+     * por `killSwitch`, activación de una ranura nueva).
+     */
+    suspend fun activeModelVersion(): String? = activeModel()?.version
 }
 
 class LoadedModel(

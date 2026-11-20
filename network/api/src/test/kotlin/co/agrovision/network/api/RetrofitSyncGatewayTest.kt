@@ -203,6 +203,16 @@ class RetrofitSyncGatewayTest {
         }
 
     @Test
+    fun `un 204 solo es valido donde el endpoint lo admite`() = runBlocking<Unit> {
+        api.enqueue(MockResponse().setResponseCode(204))
+        api.enqueue(MockResponse().setResponseCode(204))
+
+        assertEquals(AgroResult.success(emptyList<Any>()), gateway.fetchMyResolutions(null))
+        val upload = gateway.uploadCaptures(listOf(capture(GeoPoint(2.9, -75.2, 5f))))
+        assertEquals(true, upload is AgroResult.Failure)
+    }
+
+    @Test
     fun `un 422 ubicacion_exacta_requerida se traduce a un error propio`() = runBlocking<Unit> {
         api.enqueue(
             MockResponse().setResponseCode(422)

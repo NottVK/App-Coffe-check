@@ -92,4 +92,16 @@ class RetrofitAccountGatewayTest {
         assertEquals(AgroResult.failure(DomainError.NotSignedIn), gateway.fetchProducerProfile())
         assertEquals(AgroResult.failure(DomainError.NotSignedIn), syncGateway.fetchMyResolutions(null))
     }
+
+    @Test
+    fun `una respuesta malformada es un fallo de dominio y no una excepcion`() = runBlocking<Unit> {
+        api.enqueue(MockResponse().setBody("no es json"))
+        api.enqueue(MockResponse().setBody("[1, 2]"))
+
+        val otp = gateway.verifyOtp("3001234567", "123456")
+        val profile = gateway.fetchProducerProfile()
+
+        assertEquals(true, otp is AgroResult.Failure && otp.error is DomainError.RemoteFailure)
+        assertEquals(true, profile is AgroResult.Failure && profile.error is DomainError.RemoteFailure)
+    }
 }

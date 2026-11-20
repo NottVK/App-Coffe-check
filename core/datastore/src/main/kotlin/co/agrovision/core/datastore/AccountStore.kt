@@ -1,6 +1,7 @@
 package co.agrovision.core.datastore
 
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -48,19 +49,21 @@ class AccountStore @Inject constructor(
         store.edit { preferences ->
             val updated = transform(toAccount(preferences, deviceId))
             preferences[Keys.TIER] = updated.tier.name
-            updated.phone?.let { preferences[Keys.PHONE] = it }
-            updated.displayName?.let { preferences[Keys.DISPLAY_NAME] = it }
-            updated.farmName?.let { preferences[Keys.FARM_NAME] = it }
-            updated.vereda?.let { preferences[Keys.VEREDA] = it }
-            updated.municipality?.let { preferences[Keys.MUNICIPALITY] = it }
-            updated.registeredAtEpochMillis?.let { preferences[Keys.REGISTERED_AT] = it }
-            updated.validatedAtEpochMillis?.let { preferences[Keys.VALIDATED_AT] = it }
+            // Un valor nulo borra la clave: al cambiar de cuenta no puede quedar el perfil
+            // de la anterior. Quien no quiere tocar un campo lo copia tal cual.
+            preferences.put(Keys.PHONE, updated.phone)
+            preferences.put(Keys.DISPLAY_NAME, updated.displayName)
+            preferences.put(Keys.FARM_NAME, updated.farmName)
+            preferences.put(Keys.VEREDA, updated.vereda)
+            preferences.put(Keys.MUNICIPALITY, updated.municipality)
+            preferences.put(Keys.REGISTERED_AT, updated.registeredAtEpochMillis)
+            preferences.put(Keys.VALIDATED_AT, updated.validatedAtEpochMillis)
             preferences[Keys.TRAINING_CONSENT] = updated.trainingConsent
             preferences[Keys.SESSION_EXPIRED] = updated.sessionExpired
             preferences[Keys.TRAINING_REVOCATION_PENDING] = updated.trainingRevocationPending
             preferences[Keys.POLICY_REVOCATION_PENDING] = updated.policyRevocationPending
-            updated.coffeeVariety?.let { preferences[Keys.COFFEE_VARIETY] = it.name }
-            updated.plantingAge?.let { preferences[Keys.PLANTING_AGE] = it.name }
+            preferences.put(Keys.COFFEE_VARIETY, updated.coffeeVariety?.name)
+            preferences.put(Keys.PLANTING_AGE, updated.plantingAge?.name)
             // A diferencia del resto, estos dos se pueden borrar: revocar la política
             // tiene que dejarlos vacíos, no conservar el valor anterior.
             val policyVersion = updated.dataPolicyVersion
@@ -70,6 +73,10 @@ class AccountStore @Inject constructor(
             if (policyAt != null) preferences[Keys.DATA_POLICY_AT] = policyAt
             else preferences.remove(Keys.DATA_POLICY_AT)
         }
+    }
+
+    private fun <T> MutablePreferences.put(key: Preferences.Key<T>, value: T?) {
+        if (value != null) this[key] = value else remove(key)
     }
 
     private fun toAccount(preferences: Preferences, deviceId: String) = Account(

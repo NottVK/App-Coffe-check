@@ -59,6 +59,13 @@ interface CaptureDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(capture: CaptureEntity)
 
+    /**
+     * Solo la sincronización escribe aquí, y cada escritura exige el estado del que parte:
+     * marcar UPLOADING solo desde PENDING, y conciliar el resultado solo si la fila sigue
+     * UPLOADING. Si el productor corrigió o confirmó mientras el lote viajaba, la fila ya
+     * volvió a PENDING con el dato nuevo y la respuesta del envío anterior —que no lo
+     * llevaba— no puede darla por subida. Tampoco resucita una fila que pasó a SKIPPED.
+     */
     @Query(
         """
         UPDATE captures
@@ -69,6 +76,7 @@ interface CaptureDao {
             sync_attempts = CASE WHEN :countsAsAttempt AND (:state = 'PENDING' OR :state = 'FAILED')
                                  THEN sync_attempts + 1 ELSE sync_attempts END
         WHERE id = :id
+          AND sync_state = CASE WHEN :state = 'UPLOADING' THEN 'PENDING' ELSE 'UPLOADING' END
         """
     )
     suspend fun updateSyncState(
@@ -81,16 +89,17 @@ interface CaptureDao {
     )
 
     /**
-     * Confirmar también reencola la fila si ya estaba subida: el servidor tiene la
-     * captura pero no la confirmación. Al reenviarla llega como duplicada y el
-     * servidor actualiza la confirmación de la que ya guardó.
+     * Confirmar también reencola la fila si ya estaba subida —o subiendo, con un envío
+     * que no llevaba la confirmación—: el servidor tiene la captura pero no la
+     * confirmación. Al reenviarla llega como duplicada y el servidor actualiza la
+     * confirmación de la que ya guardó.
      */
     @Query(
         """
         UPDATE captures
         SET user_confirmed = 1,
-            sync_state = CASE WHEN sync_state = 'UPLOADED' THEN 'PENDING' ELSE sync_state END,
-            next_attempt_at = CASE WHEN sync_state = 'UPLOADED' THEN NULL ELSE next_attempt_at END
+            sync_state = CASE WHEN sync_state IN ('UPLOADED', 'UPLOADING') THEN 'PENDING' ELSE sync_state END,
+            next_attempt_at = CASE WHEN sync_state IN ('UPLOADED', 'UPLOADING') THEN NULL ELSE next_attempt_at END
         WHERE id = :id
         """
     )

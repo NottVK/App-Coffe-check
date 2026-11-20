@@ -15,6 +15,8 @@ import co.agrovision.core.model.port.ImageStore
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
@@ -111,22 +113,47 @@ class CaptureRepositoryImpl @Inject constructor(
      */
     override suspend fun delete(id: String) {
         withContext(io) {
-            val capture = dao.findById(id) ?: return@withContext
-            val paths = listOf(capture.imagePath, capture.thumbnailPath)
-            // Primero la fila y después los archivos: si el proceso muere en
-            // medio, queda un archivo huérfano y no una fila sin imagen.
-            dao.deleteByIds(listOf(id))
-            val inUse = dao.pathsUsedByReviews(paths).toSet()
-            images.delete(paths.filterNot { it in inUse })
+            SharedImageFiles.lock.withLock {
+                val capture = dao.findById(id) ?: return@withContext
+                val paths = listOf(capture.imagePath, capture.thumbnailPath)
+                // Primero la fila y después los archivos: si el proceso muere en
+                // medio, queda un archivo huérfano y no una fila sin imagen.
+                dao.deleteByIds(listOf(id))
+                val inUse = dao.pathsUsedByReviews(paths).toSet()
+                images.delete(paths.filterNot { it in inUse })
+            }
         }
     }
 
     override suspend fun purgeExpired(nowEpochMillis: Long): Int = withContext(io) {
         val cutoff = nowEpochMillis - AgroConstants.Image.RETENTION.inWholeMilliseconds
-        val purged = dao.purge(cutoff)
-        if (purged.isNotEmpty()) {
-            images.delete(purged.flatMap { listOf(it.imagePath, it.thumbnailPath) })
+        // Bajo el mismo cerrojo que crear una solicitud: ninguna puede empezar a usar una
+        // foto entre que se comprueba que nadie la usa y que se borra.
+        SharedImageFiles.lock.withLock {
+            val purged = dao.purge(cutoff)
+            if (purged.isNotEmpty()) {
+                // Una solicitud de revisión nace de la foto del escaneo y comparte el
+                // archivo: el de una solicitud sigue vivo aunque su captura caduque.
+                val paths = purged.flatMap { listOf(it.imagePath, it.thumbnailPath) }.distinct()
+                val inUse = paths.chunked(SQLITE_MAX_ARGS)
+                    .flatMap { dao.pathsUsedByReviews(it) }
+                    .toSet()
+                images.delete(paths.filterNot { it in inUse })
+            }
+            purged.size
         }
-        purged.size
     }
+}
+
+/** Tope de parámetros por consulta de SQLite en las versiones antiguas de Android. */
+private const val SQLITE_MAX_ARGS = 400
+
+/**
+ * Las fotos se comparten entre capturas y solicitudes de revisión. Crear una
+ * solicitud y borrar fotos (purga, borrado de una captura o de una solicitud) se
+ * serializan con este cerrojo para que la comprobación «nadie más la usa» siga
+ * siendo cierta en el momento de borrar el archivo.
+ */
+internal object SharedImageFiles {
+    val lock = Mutex()
 }

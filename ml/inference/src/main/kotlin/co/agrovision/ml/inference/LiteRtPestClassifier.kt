@@ -13,6 +13,9 @@ import co.agrovision.core.model.scan.RawInference
 import co.agrovision.core.model.scan.RgbImage
 import co.agrovision.ml.preprocessing.TensorPreprocessor
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
@@ -62,7 +65,13 @@ class LiteRtPestClassifier @Inject constructor(
     private val gateHolder: ActiveGateHolder,
 ) : PestClassifier {
 
+    /** Solo se lee y escribe desde [inferenceDispatcher]; `@Volatile` para la
+     *  lectura informativa de [activeModelVersion] desde otros hilos. */
+    @Volatile
     private var session: Session? = null
+
+    /** Para cerrar el intérprete en el mismo hilo que lo usa (ver [release]). */
+    private val releaseScope = CoroutineScope(SupervisorJob() + inferenceDispatcher)
 
     // El `: Unit` es explícito a propósito: sin él, Kotlin infiere `Unit?` a
     // partir del `session?.let { … }` final y la firma deja de encajar con el
@@ -101,14 +110,22 @@ class LiteRtPestClassifier @Inject constructor(
     }
 
     override suspend fun classify(image: RgbImage): RawInference = withContext(inferenceDispatcher) {
-        val active = session ?: run {
+        // El modelo activo puede haber cambiado desde que se creó la sesión: una reversión por
+        // `killSwitch` retira el modelo y solo mueve el puntero. Se compara la versión antes de
+        // cada clasificación y, si cambió, se reconstruye la sesión con el modelo vigente.
+        val wanted = models.activeModelVersion()
+        val current = session
+        val active = if (current == null || (wanted != null && wanted != current.version)) {
             warmUpBlocking()
             session
+        } else {
+            current
         } ?: error("No hay modelo activo instalado")
 
         val input = preprocessor.toInputBuffer(
             image = preprocessor.centerCropAndResize(image),
             quantized = active.quantizedInput,
+            signed = active.signedInput,
         )
 
         val startedAt = System.nanoTime()
@@ -136,10 +153,14 @@ class LiteRtPestClassifier @Inject constructor(
     override fun activeModelVersion(): String? = session?.version
 
     override fun release() {
-        // Se puede llamar desde cualquier hilo (`onCleared()` corre en el
-        // principal). `Session.close()` es idempotente y no bloquea.
-        session?.close()
-        session = null
+        // Se puede llamar desde cualquier hilo (`onCleared()` corre en el principal),
+        // pero el cierre se encola en el hilo de inferencia: cerrar el intérprete
+        // mientras otra corrutina lo está ejecutando es un fallo en código nativo.
+        // Al ser un hilo único, el cierre espera a que termine la inferencia en curso.
+        releaseScope.launch {
+            session?.close()
+            session = null
+        }
     }
 
     private suspend fun warmUpBlocking() = warmUp()
@@ -156,6 +177,8 @@ class LiteRtPestClassifier @Inject constructor(
         val interpreter: Interpreter,
         val accelerator: AcceleratorChoice,
         val quantizedInput: Boolean,
+        /** Entrada INT8: el preprocesado desplaza los bytes en vez de escribirlos crudos. */
+        val signedInput: Boolean,
         private val logitsIndex: Int,
         /** -1 en un modelo de una sola salida: no hay embedding. */
         private val embeddingIndex: Int,
@@ -272,6 +295,7 @@ class LiteRtPestClassifier @Inject constructor(
                     accelerator = accelerator,
                     quantizedInput = interpreter.getInputTensor(0).dataType() == DataType.UINT8 ||
                         interpreter.getInputTensor(0).dataType() == DataType.INT8,
+                    signedInput = interpreter.getInputTensor(0).dataType() == DataType.INT8,
                     logitsIndex = logits.first,
                     embeddingIndex = embedding.first,
                     logitsSize = logits.second,

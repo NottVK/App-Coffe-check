@@ -93,6 +93,11 @@ class SyncPendingUseCase @Inject constructor(
         if (gate.isBlocked) {
             return AgroResult.success(SyncSummary.skipped(SkipReason.UPLOAD_GATE))
         }
+        // Sin la política de datos vigente (no aceptada, revocada o con la revocación aún sin
+        // confirmar en el servidor) no sale ni una foto ni una coordenada del teléfono.
+        if (!current.authorizesUploads) {
+            return AgroResult.success(SyncSummary.skipped(SkipReason.UPLOAD_GATE))
+        }
 
         val now = clock.nowEpochMillis()
         var uploaded = 0
@@ -106,11 +111,16 @@ class SyncPendingUseCase @Inject constructor(
         // en la consulta SQL, no en un `sortedBy` en memoria sobre una lista que
         // podría tener miles de filas.
         val captureBatch = captures.nextBatchToUpload(AgroConstants.Sync.BATCH_SIZE, now)
-        if (captureBatch.isNotEmpty()) {
+        // Los consentimientos se vuelven a leer justo antes de cada envío: el productor puede
+        // revocarlos mientras sube un lote largo, y lo que eligió AHORA es lo que vale.
+        val beforeCaptures = authorization()
+        if (!beforeCaptures.policy) return policyRevoked(trigger, uploaded, failed)
+        if (captureBatch.isNotEmpty() && !beforeCaptures.training) captures.skipUnsent()
+        if (captureBatch.isNotEmpty() && beforeCaptures.training) {
             captureBatch.forEach { captures.updateSyncState(it.id, SyncState.UPLOADING) }
             // La coordenada exacta de una captura solo sale con el consentimiento específico de ubicación
             // (el mismo que protege las solicitudes de revisión). Sin él viaja aproximada, ~1 km.
-            val outgoingCaptures = if (shareExact(preferences)) captureBatch
+            val outgoingCaptures = if (beforeCaptures.exactLocation) captureBatch
             else captureBatch.map { capture -> capture.copy(location = capture.location?.coarsened()) }
             when (val result = gateway.uploadCaptures(outgoingCaptures)) {
                 is AgroResult.Failure -> {
@@ -155,8 +165,13 @@ class SyncPendingUseCase @Inject constructor(
                 }
                 is AgroResult.Success -> {
                     val reconciled = reconcileCaptures(captureBatch, result.value, now)
-                    uploaded += reconciled.first
-                    failed += reconciled.second
+                    uploaded += reconciled.uploaded
+                    failed += reconciled.failed
+                    if (reconciled.authorizationLost) {
+                        val after = authorization()
+                        if (!after.training) captures.skipUnsent()
+                        if (!after.policy) return policyRevoked(trigger, uploaded, failed)
+                    }
                 }
             }
         }
@@ -170,8 +185,10 @@ class SyncPendingUseCase @Inject constructor(
         // consentimiento de ubicación VIGENTE al enviar, no el que había al
         // crearla: si el productor lo revocó con la solicitud aún en cola, se
         // retiene sin gastar reintentos hasta que lo vuelva a autorizar.
-        val consented = shareExact(preferences)
-        if (!consented) candidates.forEach { holdForLocationConsent(it) }
+        val beforeReviews = authorization()
+        if (!beforeReviews.policy) return policyRevoked(trigger, uploaded, failed)
+        val consented = beforeReviews.exactLocation
+        if (!consented) candidates.forEach { holdForConsent(it, LOCATION_CONSENT_HOLD_MESSAGE) }
         val (reviewBatch, withoutExactLocation) = (if (consented) candidates else emptyList())
             .partition { it.location?.isExact == true }
         withoutExactLocation.forEach { holdForExactLocation(it, now) }
@@ -218,6 +235,9 @@ class SyncPendingUseCase @Inject constructor(
                     uploaded += reconciled.submitted
                     failed += reconciled.failed
                     if (reconciled.sessionExpired) return signInRequired(trigger, uploaded, failed)
+                    if (reconciled.authorizationLost && !authorization().policy) {
+                        return policyRevoked(trigger, uploaded, failed)
+                    }
                 }
             }
         }
@@ -266,6 +286,20 @@ class SyncPendingUseCase @Inject constructor(
         )
     }
 
+    /** El productor revocó la política de datos a mitad de la sincronización: se corta ahí. */
+    private fun policyRevoked(
+        trigger: SyncTrigger,
+        uploaded: Int,
+        failed: Int,
+    ): AgroResult<SyncSummary, DomainError> = AgroResult.success(
+        SyncSummary(
+            trigger = trigger,
+            uploaded = uploaded,
+            failed = failed,
+            skipReason = SkipReason.UPLOAD_GATE,
+        )
+    )
+
     /** El servidor pidió esperar (429/503): se corta la sincronización sin gastar reintentos. */
     private fun rateLimited(
         trigger: SyncTrigger,
@@ -284,13 +318,32 @@ class SyncPendingUseCase @Inject constructor(
         batch: List<co.agrovision.core.model.capture.Capture>,
         outcomes: List<UploadOutcome>,
         now: Long,
-    ): Pair<Int, Int> {
+    ): CaptureReconciliation {
         val byId = outcomes.associateBy { it.localId }
         var uploaded = 0
         var failed = 0
+        var authorizationLost = false
 
         batch.forEach { capture ->
-            when (val outcome = byId[capture.id]) {
+            val outcome = byId[capture.id]
+            // La foto es lo que más pesa y lo que más expone: antes de cada una se comprueba
+            // que el productor no haya revocado la política o el consentimiento de entrenamiento.
+            if (outcome?.presignedImageUrl != null &&
+                outcome.status != UploadStatus.REJECTED &&
+                (authorizationLost || !authorization().let { it.policy && it.training })
+            ) {
+                authorizationLost = true
+                captures.updateSyncState(
+                    id = capture.id,
+                    state = SyncState.PENDING,
+                    serverId = outcome.serverId,
+                    error = capture.sync.lastError,
+                    nextAttemptAtEpochMillis = capture.sync.nextAttemptAtEpochMillis,
+                    countsAsAttempt = false,
+                )
+                return@forEach
+            }
+            when (outcome) {
                 null -> captures.updateSyncState(
                     id = capture.id,
                     state = retryStateFor(capture.sync.attempts),
@@ -338,8 +391,14 @@ class SyncPendingUseCase @Inject constructor(
                 }
             }
         }
-        return uploaded to failed
+        return CaptureReconciliation(uploaded, failed, authorizationLost)
     }
+
+    private data class CaptureReconciliation(
+        val uploaded: Int,
+        val failed: Int,
+        val authorizationLost: Boolean,
+    )
 
     /**
      * Una solicitud solo pasa a enviada cuando el servidor aceptó los metadatos
@@ -358,8 +417,13 @@ class SyncPendingUseCase @Inject constructor(
         val byId = outcomes.associateBy { it.localId }
         var submitted = 0
         var failed = 0
+        var authorizationLost = false
         for (review in batch) {
             val outcome = byId[review.id]
+            if (authorizationLost) {
+                holdForConsent(review, CONSENT_REVOKED_HOLD_MESSAGE, outcome?.serverId)
+                continue
+            }
             when {
                 outcome == null -> {
                     failed++
@@ -401,10 +465,16 @@ class SyncPendingUseCase @Inject constructor(
                     }
                     ImageUpload.SessionExpired ->
                         return ReviewReconciliation(submitted, failed, sessionExpired = true)
+                    // Revocó la política o la ubicación exacta: esta y las que faltan esperan,
+                    // sin gastar reintentos, a que vuelva a autorizar.
+                    ImageUpload.AuthorizationLost -> {
+                        authorizationLost = true
+                        holdForConsent(review, CONSENT_REVOKED_HOLD_MESSAGE, outcome.serverId)
+                    }
                 }
             }
         }
-        return ReviewReconciliation(submitted, failed, sessionExpired = false)
+        return ReviewReconciliation(submitted, failed, sessionExpired = false, authorizationLost)
     }
 
     /**
@@ -428,6 +498,7 @@ class SyncPendingUseCase @Inject constructor(
                 if (outcome.status == UploadStatus.DUPLICATE) continue
                 return ImageUpload.Failed("El servidor no devolvió URL de subida para la foto ${image.id}.")
             }
+            if (!authorization().let { it.policy && it.exactLocation }) return ImageUpload.AuthorizationLost
             val result = gateway.uploadImage(url, image.imagePath)
             if (result is AgroResult.Failure) {
                 if (result.error == DomainError.NotSignedIn) return ImageUpload.SessionExpired
@@ -441,12 +512,14 @@ class SyncPendingUseCase @Inject constructor(
         val submitted: Int,
         val failed: Int,
         val sessionExpired: Boolean,
+        val authorizationLost: Boolean = false,
     )
 
     private sealed interface ImageUpload {
         data object Done : ImageUpload
         data class Failed(val reason: String) : ImageUpload
         data object SessionExpired : ImageUpload
+        data object AuthorizationLost : ImageUpload
     }
 
     /** Deja la solicitud en cola con la razón visible. No es un fallo de red: el
@@ -460,18 +533,35 @@ class SyncPendingUseCase @Inject constructor(
         )
 
     /** Consentimiento revocado: la solicitud espera, visible y sin gastar reintentos,
-     *  a que el productor vuelva a autorizar compartir la ubicación exacta. */
-    private suspend fun holdForLocationConsent(review: ReviewRequest) =
+     *  a que el productor vuelva a autorizar. */
+    private suspend fun holdForConsent(review: ReviewRequest, message: String, serverId: String? = null) =
         reviews.updateSyncState(
             id = review.id,
             state = SyncState.PENDING,
-            error = LOCATION_CONSENT_HOLD_MESSAGE,
+            serverId = serverId,
+            error = message,
             nextAttemptAtEpochMillis = review.sync.nextAttemptAtEpochMillis,
             countsAsAttempt = false,
         )
 
     private fun shareExact(preferences: UserPreferences): Boolean =
         preferences.locationShareConsentAtEpochMillis != null
+
+    /** Lo que el productor tiene autorizado en este instante. Se lee de nuevo antes de
+     *  cada envío: nunca se reutiliza lo leído al empezar la sincronización. */
+    private suspend fun authorization(): Authorization {
+        val preferences = settings.current()
+        return Authorization(
+            policy = account.current().authorizesUploads,
+            training = preferences.trainingConsent,
+            exactLocation = shareExact(preferences),
+        )
+    }
+
+    private data class Authorization(val policy: Boolean, val training: Boolean, val exactLocation: Boolean)
+
+    private val co.agrovision.core.model.identity.Account.authorizesUploads: Boolean
+        get() = !needsPolicy && !policyRevocationPending
 
     private suspend fun retryReview(
         review: ReviewRequest,
@@ -537,6 +627,8 @@ class SyncPendingUseCase @Inject constructor(
         const val EXACT_LOCATION_REQUIRED_CODE = "ubicacion_exacta_requerida"
         const val EXACT_LOCATION_HOLD_MESSAGE =
             "Falta la ubicación exacta de la foto. Toma la foto de nuevo en el lote para enviarla."
+        const val CONSENT_REVOKED_HOLD_MESSAGE =
+            "Retiraste una autorización mientras se enviaba. Autorízala de nuevo para enviar esta solicitud."
         const val LOCATION_CONSENT_HOLD_MESSAGE =
             "Retiraste el permiso de compartir la ubicación exacta. Autorízalo de nuevo para enviar esta solicitud."
         val running = Mutex()

@@ -160,6 +160,18 @@ interface ReviewDao {
     )
     suspend fun pathsStillUsed(paths: List<String>): List<String>
 
+    /** Solicitudes que aún no salieron del teléfono y ya no deben salir (otra cuenta
+     *  inició sesión): quedan visibles como fallidas, con el motivo, y la cola no las
+     *  vuelve a tomar. */
+    @Query(
+        """
+        UPDATE review_requests
+        SET sync_state = 'FAILED', last_sync_error = :reason, next_attempt_at = NULL
+        WHERE sync_state IN ('PENDING', 'UPLOADING', 'FAILED')
+        """
+    )
+    suspend fun abandonUnsent(reason: String): Int
+
     @Query("SELECT COUNT(*) FROM review_requests WHERE sync_state = 'PENDING'")
     fun observePendingCount(): Flow<Int>
 }

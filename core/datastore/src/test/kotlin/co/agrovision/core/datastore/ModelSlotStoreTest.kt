@@ -38,6 +38,23 @@ class ModelSlotStoreTest {
     }
 
     @Test
+    fun `la reversion no se aplica si el puntero ya no apunta a lo comprobado en disco`() = runTest {
+        val slots = store(
+            ModelSlotPointer(
+                activeSlot = ModelSlot.B,
+                activeVersion = "2.0.0",
+                previousSlot = ModelSlot.A,
+                previousVersion = "1.0.0",
+            ),
+        )
+
+        assertFalse(slots.rollBack(expectedSlot = ModelSlot.A, expectedVersion = "1.5.0"))
+        assertEquals(ModelSlot.B, slots.current().activeSlot)
+        assertTrue(slots.rollBack(expectedSlot = ModelSlot.A, expectedVersion = "1.0.0"))
+        assertEquals(ModelSlot.A, slots.current().activeSlot)
+    }
+
+    @Test
     fun `sin modelo anterior la reversion no cambia de ranura`() = runTest {
         val slots = store()
         slots.activate(ModelSlot.B, "1.3.2", nowEpochMillis = 10L)

@@ -7,6 +7,7 @@ import co.agrovision.core.model.capture.GeoPoint
 import co.agrovision.core.model.capture.SyncState
 import co.agrovision.core.model.capture.SyncStatus
 import co.agrovision.core.model.identity.Account
+import co.agrovision.core.model.identity.DataPolicy
 import co.agrovision.core.model.identity.UserTier
 import co.agrovision.core.model.pest.CropType
 import co.agrovision.core.model.pest.PlantOrgan
@@ -78,7 +79,8 @@ class SyncPendingUseCaseTest {
         coEvery { it.mergeRemoteStatuses(any()) } returns 0
     }
     private val gateway = FakeGateway()
-    private var currentAccount = Account.anonymous("device").copy(tier = UserTier.T2_VALIDADO)
+    private var currentAccount = Account.anonymous("device")
+        .copy(tier = UserTier.T2_VALIDADO, dataPolicyVersion = DataPolicy.CURRENT_VERSION)
     private val account = mockk<AccountRepository>().also {
         coEvery { it.current() } answers { currentAccount }
         coJustRun { it.markSessionExpired() }
@@ -234,6 +236,7 @@ class SyncPendingUseCaseTest {
             every { id } returns "cap-1"
             every { sync } returns SyncStatus(SyncState.PENDING, attempts = 3, lastError = "antes")
         })
+        coEvery { settings.current() } returns UserPreferences.DEFAULT.copy(trainingConsent = true)
         gateway.captureUploadError = DomainError.NotSignedIn
 
         val summary = runSync()
@@ -421,6 +424,52 @@ class SyncPendingUseCaseTest {
         verifyNeverSubmitted()
     }
 
+    // ── Autorización vigente al enviar ───────────────────────────────────────
+
+    @Test
+    fun `sin la politica de datos vigente no sale nada`() = runTest {
+        coEvery { captures.nextBatchToUpload(any(), any()) } returns listOf(capture(null))
+        coEvery { settings.current() } returns
+            UserPreferences.DEFAULT.copy(trainingConsent = true, locationShareConsentAtEpochMillis = 1L)
+        currentAccount = currentAccount.copy(dataPolicyVersion = null, policyRevocationPending = true)
+
+        val summary = runSync()
+
+        assertEquals(SkipReason.UPLOAD_GATE, summary.skipReason)
+        assertTrue(gateway.sentCaptures.isEmpty())
+        assertEquals(0, gateway.reviewUploadCalls)
+    }
+
+    @Test
+    fun `revocar la ubicacion a mitad del envio detiene las fotos que faltan`() = runTest {
+        var preferences = UserPreferences.DEFAULT.copy(locationShareConsentAtEpochMillis = 1L)
+        coEvery { settings.current() } answers { preferences }
+        respondWith(outcome(UploadStatus.ACCEPTED, "img-1" to "https://s3/1", "img-2" to "https://s3/2"))
+        gateway.onImageUploaded = { preferences = preferences.copy(locationShareConsentAtEpochMillis = null) }
+
+        runSync()
+
+        assertEquals(listOf("https://s3/1" to "/fotos/1.jpg"), gateway.uploadedImages)
+        verifyNeverSubmitted()
+        coVerify { reviews.updateSyncState("req-1", SyncState.PENDING, "srv-1", any(), any(), null, false) }
+    }
+
+    @Test
+    fun `revocar el entrenamiento tras subir los metadatos no sube la foto`() = runTest {
+        var preferences = UserPreferences.DEFAULT.copy(trainingConsent = true)
+        coEvery { settings.current() } answers { preferences }
+        coEvery { captures.nextBatchToUpload(any(), any()) } returns listOf(capture(null))
+        coEvery { reviews.nextBatchToUpload(any(), any()) } returns emptyList()
+        gateway.captureOutcomes = listOf(captureOutcome(UploadStatus.ACCEPTED, "https://s3/c"))
+        gateway.onCapturesSent = { preferences = preferences.copy(trainingConsent = false) }
+
+        runSync()
+
+        assertTrue(gateway.uploadedImages.isEmpty())
+        coVerify(exactly = 0) { captures.updateSyncState("cap-1", SyncState.UPLOADED, any(), any(), any(), any()) }
+        coVerify { captures.skipUnsent() }
+    }
+
     // ── Foto de las capturas ─────────────────────────────────────────────────
 
     @Test
@@ -525,6 +574,8 @@ class SyncPendingUseCaseTest {
         val unauthorizedUrls = mutableSetOf<String>()
         val uploadedImages = mutableListOf<Pair<String, String>>()
         val requestedCursors = mutableListOf<Long?>()
+        var onImageUploaded: () -> Unit = {}
+        var onCapturesSent: () -> Unit = {}
 
         override suspend fun uploadReviewRequests(
             batch: List<ReviewRequest>,
@@ -537,6 +588,7 @@ class SyncPendingUseCaseTest {
             batch: List<Capture>,
         ): AgroResult<List<UploadOutcome>, DomainError> {
             sentCaptures += batch
+            onCapturesSent()
             return captureUploadError?.let { AgroResult.failure(it) } ?: AgroResult.success(captureOutcomes)
         }
 
@@ -548,6 +600,7 @@ class SyncPendingUseCaseTest {
             in failingUrls -> AgroResult.failure(DomainError.NoConnection)
             else -> {
                 uploadedImages += presignedUrl to localPath
+                onImageUploaded()
                 AgroResult.unit
             }
         }

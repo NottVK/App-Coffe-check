@@ -29,6 +29,7 @@ import co.agrovision.core.model.scan.Embedding
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -59,10 +60,12 @@ class ReviewRequestRepositoryImpl @Inject constructor(
                 // solicitud sin sus tomas es una solicitud que el agrónomo no
                 // puede resolver, y ocuparía su tiempo —el recurso más escaso del
                 // sistema— para acabar en «inutilizable».
-                dao.insertWithImages(
-                    request = request.toEntity(),
-                    images = request.images.map { it.toEntity(request.id) },
-                )
+                SharedImageFiles.lock.withLock {
+                    dao.insertWithImages(
+                        request = request.toEntity(),
+                        images = request.images.map { it.toEntity(request.id) },
+                    )
+                }
                 AgroResult.unit
             } catch (error: Exception) {
                 AgroResult.failure(DomainError.PersistenceFailed(error.message.orEmpty()))
@@ -123,13 +126,15 @@ class ReviewRequestRepositoryImpl @Inject constructor(
     }
 
     override suspend fun delete(id: String) = withContext(io) {
-        val paths = dao.imagePathsOf(id).flatMap { listOf(it.imagePath, it.thumbnailPath) }.distinct()
-        // Primero la fila y después los archivos: si el proceso muere en medio
-        // queda un archivo huérfano, nunca una solicitud sin imágenes.
-        dao.deleteById(id)
-        if (paths.isNotEmpty()) {
-            val inUse = dao.pathsStillUsed(paths).toSet()
-            images.delete(paths.filterNot { it in inUse })
+        SharedImageFiles.lock.withLock {
+            val paths = dao.imagePathsOf(id).flatMap { listOf(it.imagePath, it.thumbnailPath) }.distinct()
+            // Primero la fila y después los archivos: si el proceso muere en medio
+            // queda un archivo huérfano, nunca una solicitud sin imágenes.
+            dao.deleteById(id)
+            if (paths.isNotEmpty()) {
+                val inUse = dao.pathsStillUsed(paths).toSet()
+                images.delete(paths.filterNot { it in inUse })
+            }
         }
     }
 }

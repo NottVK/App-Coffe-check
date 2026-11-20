@@ -70,13 +70,16 @@ class ModelSlotStore @Inject constructor(
      * de «menos de 30 minutos entre detección de regresión y reversión efectiva»
      * es alcanzable.
      */
-    suspend fun rollBack(): Boolean {
+    suspend fun rollBack(expectedSlot: ModelSlot? = null, expectedVersion: String? = null): Boolean {
         var reverted = false
         store.updateData { previous ->
             val target = previous.previousSlot ?: return@updateData previous
             // Un puntero anterior sin versión es una ranura vacía (punteros guardados antes de esta
             // corrección): revertir a ella dejaría la app sin modelo.
             if (previous.previousVersion == null) return@updateData previous
+            // Quien comprobó en disco el destino exige que el puntero no haya cambiado desde entonces.
+            if (expectedSlot != null && expectedSlot != target) return@updateData previous
+            if (expectedVersion != null && expectedVersion != previous.previousVersion) return@updateData previous
             reverted = true
             ModelSlotPointer(
                 activeSlot = target,

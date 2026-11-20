@@ -151,7 +151,8 @@ class RetrofitSyncGateway @Inject constructor(
     override suspend fun fetchMyResolutions(
         sinceEpochMillis: Long?,
     ): AgroResult<List<RemoteReviewStatus>, DomainError> = withContext(io) {
-        request { api.myResolutions(sinceEpochMillis) }
+        // 204 en la consulta de estados: no hay nada nuevo desde el cursor.
+        request(onNoContent = { emptyList() }) { api.myResolutions(sinceEpochMillis) }
             .map { rows -> rows.mapNotNull { it.toDomain() } }
     }
 
@@ -214,7 +215,15 @@ class RetrofitSyncGateway @Inject constructor(
 
     // ── Utilidades ───────────────────────────────────────────────────────────
 
-    private inline fun <T> request(block: () -> Response<T>): AgroResult<T, DomainError> = try {
+    /**
+     * @param onNoContent qué significa un 204 para ESTE endpoint. Sin él, un 204 es una
+     *   respuesta sin el cuerpo que se esperaba: un lote sin resultados no puede darse
+     *   por subido.
+     */
+    private inline fun <T> request(
+        noinline onNoContent: (() -> T)? = null,
+        block: () -> Response<T>,
+    ): AgroResult<T, DomainError> = try {
         val response = block()
         val body = response.body()
         when {
@@ -228,9 +237,8 @@ class RetrofitSyncGateway @Inject constructor(
                 AgroResult.failure(DomainError.ExactLocationRequired)
             !response.isSuccessful ->
                 AgroResult.failure(DomainError.RemoteFailure(response.code(), response.message()))
-            body == null && response.code() == NO_CONTENT ->
-                @Suppress("UNCHECKED_CAST")
-                AgroResult.success(Unit as T)
+            body == null && response.code() == NO_CONTENT && onNoContent != null ->
+                AgroResult.success(onNoContent())
             body == null ->
                 AgroResult.failure(DomainError.RemoteFailure(response.code(), "sin cuerpo"))
             else -> AgroResult.success(body)
