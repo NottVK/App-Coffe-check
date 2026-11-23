@@ -132,7 +132,16 @@ class SmokeTestRunner @Inject constructor() {
         val tensor = interpreter.getInputTensor(0)
         val bytes = tensor.numBytes()
         val buffer = ByteBuffer.allocateDirect(bytes).order(ByteOrder.nativeOrder())
-        repeat(bytes) { index -> buffer.put((index % RAMP_PERIOD).toByte()) }
+        if (tensor.dataType() == DataType.FLOAT32) {
+            // Un modelo con entrada decimal (p. ej. float16 exportado con entrada float32) no puede recibir
+            // una rampa de bytes: leída como float32 produce NaN e infinitos y la prueba fallaría con un
+            // modelo sano. Se le da una rampa de valores en el rango de la entrada normalizada (-2 a 2).
+            repeat(bytes / Float.SIZE_BYTES) { index ->
+                buffer.putFloat((index % RAMP_PERIOD) / (RAMP_PERIOD - 1).toFloat() * FLOAT_RANGE - FLOAT_RANGE / 2f)
+            }
+        } else {
+            repeat(bytes) { index -> buffer.put((index % RAMP_PERIOD).toByte()) }
+        }
         buffer.rewind()
         return buffer
     }
@@ -141,5 +150,6 @@ class SmokeTestRunner @Inject constructor() {
         const val TAG = "AgroVision.SmokeTest"
         const val MIN_OUTPUTS = 1
         const val RAMP_PERIOD = 256
+        const val FLOAT_RANGE = 4f
     }
 }
